@@ -2,7 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_net.h>
+
+#if defined(__ANDROID__)
+    #include <SDL_net.h>
+#else
+    #include <SDL2/SDL_net.h>
+#endif
 
 #include "networking.h"
 #include "main.h"
