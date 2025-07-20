@@ -91,25 +91,20 @@ GameEngine::GameEngine() {
     AllocConsole();
 #endif
 
-if (std::filesystem::exists(main_path)) {
-    archiveFiles.push_back(main_path);
-} else {
-
-#ifdef __ANDROID__
-    // On Android, just continue, don't show popup or exit.
-#else
-    if (ShowYesNoBox("No O2R Files", "No O2R files found. Generate one now?") == IDYES) {
-        if (!GenAssetFile()) {
-            ShowMessage("Error", "An error occured, no O2R file was generated.\n\nExiting...");
-            exit(1);
-        } else {
-            archiveFiles.push_back(main_path);
-        }
+    if (std::filesystem::exists(main_path)) {
+        archiveFiles.push_back(main_path);
     } else {
-        exit(1);
+        if (ShowYesNoBox("No O2R Files", "No O2R files found. Generate one now?") == IDYES) {
+            if (!GenAssetFile()) {
+                ShowMessage("Error", "An error occured, no O2R file was generated.\n\nExiting...");
+                exit(1);
+            } else {
+                archiveFiles.push_back(main_path);
+            }
+        } else {
+            exit(1);
+        }
     }
-#endif
-}
 
     if (std::filesystem::exists(assets_path)) {
         archiveFiles.push_back(assets_path);
