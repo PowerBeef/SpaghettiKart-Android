@@ -76,6 +76,12 @@ android {
     }
 }
 
+task copyYamlsToAssets(type: Copy) {
+    from("$rootDir/yamls")
+    into "$projectDir/src/main/assets/yamls"
+}
+preBuild.dependsOn copyYamlsToAssets
+
 dependencies {
     implementation fileTree(include: ['*.jar'], dir: 'libs')
     implementation 'androidx.core:core:1.7.0' // Use the latest version
