@@ -438,6 +438,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Android")
     set(ADDITIONAL_LIBRARY_DEPENDENCIES
         "libultraship;"
         SDL2::SDL2
+	SDL2_net::SDL2_net
         Threads::Threads
     )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "NintendoSwitch")
