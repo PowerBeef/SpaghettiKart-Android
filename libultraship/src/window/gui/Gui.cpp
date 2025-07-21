@@ -493,6 +493,14 @@ int16_t Gui::GetIntegerScaleFactor() {
 }
 
 void Gui::DrawMenu() {
+    #if defined(__ANDROID__)
+    if(GetMenuOrMenubarVisible()){
+        Ship::Mobile::DisableTouchArea();
+    } else {
+        Ship::Mobile::EnableTouchArea();
+    }
+#endif
+    
     const std::shared_ptr<Window> wnd = Context::GetInstance()->GetWindow();
     const std::shared_ptr<Config> conf = Context::GetInstance()->GetConfig();
 
