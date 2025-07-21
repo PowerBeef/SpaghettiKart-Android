@@ -124,6 +124,12 @@ public void checkAndSetupFiles() {
     boolean missingYamls = !yamlsFolder.exists() || yamlsFolder.listFiles() == null || yamlsFolder.listFiles().length == 0;
 
     if (!targetRootFolder.exists()) targetRootFolder.mkdirs();
+
+    // Always ensure mods folder exists
+        File targetModsDir = new File(targetRootFolder, "mods");
+        if (!targetModsDir.exists()) {
+            targetModsDir.mkdirs();
+        }
     
     // Move config files to external storage
     
