@@ -83,4 +83,3 @@ endif()
 
 
 target_link_libraries(ImGui PUBLIC SDL2::SDL2)
-target_link_libraries(Spaghettify PRIVATE SDL2_net::SDL2_net)
