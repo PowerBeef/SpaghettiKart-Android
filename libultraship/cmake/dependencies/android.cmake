@@ -24,6 +24,18 @@ if (NOT SDL2_NET_FOUND)
     FetchContent_MakeAvailable(SDL2_net)
 endif()
 
+# =========== libpng ===========
+find_package(PNG QUIET)
+if (NOT PNG_FOUND)
+    FetchContent_Declare(
+        libpng
+        GIT_REPOSITORY https://github.com/glennrp/libpng.git
+        GIT_TAG v1.6.43
+        OVERRIDE_FIND_PACKAGE
+    )
+    FetchContent_MakeAvailable(libpng)
+endif()
+
 #=================== nlohmann-json ===================
 find_package(nlohmann_json QUIET)
 if (NOT ${nlohmann_json_FOUND})
