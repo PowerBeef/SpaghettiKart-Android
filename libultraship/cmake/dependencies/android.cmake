@@ -81,4 +81,6 @@ if (NOT ${libzip_FOUND})
     list(APPEND ADDITIONAL_LIB_INCLUDES ${libzip_SOURCE_DIR}/lib ${libzip_BINARY_DIR})
 endif()
 
+
 target_link_libraries(ImGui PUBLIC SDL2::SDL2)
+target_link_libraries(ImGui PUBLIC SDL2_net::SDL2_net)
