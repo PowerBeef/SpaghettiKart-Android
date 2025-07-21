@@ -76,9 +76,11 @@ android {
     }
 }
 
+// Copy yamls
 task copyYamlsToAssets(type: Copy) {
-    from("$rootDir/yamls")
-    into "$projectDir/src/main/assets/yamls"
+    from("$rootDir/yamls") 
+    into("$projectDir/src/main/assets/yamls")
+    include '**/*' 
 }
 preBuild.dependsOn copyYamlsToAssets
 
