@@ -2,7 +2,7 @@ include(FetchContent)
 
 #=================== SDL2 ===================
 find_package(SDL2 QUIET)
-if (NOT SDL2_FOUND)
+if (NOT ${SDL2_FOUND})
     FetchContent_Declare(
         SDL2
         GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
@@ -14,7 +14,7 @@ endif()
 
 # =========== SDL2_net ===========
 find_package(SDL2_net QUIET)
-if (NOT SDL2_NET_FOUND)
+if (NOT ${SDL2_NET_FOUND})
     FetchContent_Declare(
         SDL2_net
         GIT_REPOSITORY https://github.com/libsdl-org/SDL_net.git
@@ -24,9 +24,21 @@ if (NOT SDL2_NET_FOUND)
     FetchContent_MakeAvailable(SDL2_net)
 endif()
 
+# =========== libpng ===========
+find_package(PNG QUIET)
+if (NOT ${PNG_FOUND})
+    FetchContent_Declare(
+        libpng
+        GIT_REPOSITORY https://github.com/glennrp/libpng.git
+        GIT_TAG v1.6.43
+        OVERRIDE_FIND_PACKAGE
+    )
+    FetchContent_MakeAvailable(libpng)
+endif()
+
 #=================== nlohmann-json ===================
 find_package(nlohmann_json QUIET)
-if (NOT nlohmann_json_FOUND)
+if (NOT ${nlohmann_json_FOUND})
     FetchContent_Declare(
         nlohmann_json
         GIT_REPOSITORY https://github.com/nlohmann/json.git
@@ -38,7 +50,7 @@ endif()
 
 #=================== tinyxml2 ===================
 find_package(tinyxml2 QUIET)
-if (NOT tinyxml2_FOUND)
+if (NOT ${tinyxml2_FOUND})
     set(tinyxml2_BUILD_TESTING OFF)
     FetchContent_Declare(
         tinyxml2
@@ -51,7 +63,7 @@ endif()
 
 #=================== spdlog ===================
 find_package(spdlog QUIET)
-if (NOT spdlog_FOUND)
+if (NOT ${spdlog_FOUND})
     FetchContent_Declare(
         spdlog
         GIT_REPOSITORY https://github.com/gabime/spdlog.git
@@ -61,9 +73,9 @@ if (NOT spdlog_FOUND)
     FetchContent_MakeAvailable(spdlog)
 endif()
 
-#=================== libzip ===================
+# =========== libzip (with all optional compression!) ===========
 find_package(libzip QUIET)
-if (NOT libzip_FOUND)
+if (NOT ${libzip_FOUND})
     set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
     set(BUILD_TOOLS OFF)
     set(BUILD_REGRESS OFF)
@@ -80,6 +92,5 @@ if (NOT libzip_FOUND)
     FetchContent_MakeAvailable(libzip)
     list(APPEND ADDITIONAL_LIB_INCLUDES ${libzip_SOURCE_DIR}/lib ${libzip_BINARY_DIR})
 endif()
-
 
 target_link_libraries(ImGui PUBLIC SDL2::SDL2)
