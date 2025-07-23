@@ -23,17 +23,20 @@ android {
         versionCode 5
         versionName "1.0.0"
         externalNativeBuild {
-            //ndkBuild {
-            //    arguments "APP_PLATFORM=android-23"
-            //    abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
-            //}
             cmake {
                  arguments "-DSDL_SHARED=ON", "-DANDROID_STL=c++_static", "-DHAVE_LD_VERSION_SCRIPT=OFF",'-DUSE_OPENGLES=ON'
-                 //abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
-                 abiFilters 'armeabi-v7a'
+                 abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
             }
         }
     }
+
+    // ✅ Universal APK: disables split APKs per ABI
+    splits {
+        abi {
+            enable false
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
@@ -49,15 +52,11 @@ android {
             jniLibs.srcDir 'libs'
         }
         externalNativeBuild {
-            //ndkBuild {
-            //    path 'jni/Android.mk'
-            //}
             cmake {
                  path '../../CMakeLists.txt'
                  version "3.31.5"
             }
         }
-       
     }
     lintOptions {
         abortOnError false
