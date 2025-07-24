@@ -2,6 +2,8 @@
 
 #ifdef __ANDROID__
 #include <jni.h>
+#include <thread>
+#include <chrono>
 
 extern "C" {
     void waitForSetupFromNative() {
@@ -16,6 +18,7 @@ extern "C" {
         jclass mainActivityClass = env->FindClass("com/izzy/kart/MainActivity");
         if (!mainActivityClass) {
             SPDLOG_ERROR("Failed to find MainActivity class");
+            env->ExceptionClear(); // Clear any pending exceptions
             return;
         }
         
@@ -23,14 +26,25 @@ extern "C" {
         jmethodID waitMethod = env->GetStaticMethodID(mainActivityClass, "waitForSetupFromNative", "()V");
         if (!waitMethod) {
             SPDLOG_ERROR("Failed to find waitForSetupFromNative method");
+            env->ExceptionClear(); // Clear any pending exceptions
+            env->DeleteLocalRef(mainActivityClass);
             return;
         }
         
         // Call the Java method
         env->CallStaticVoidMethod(mainActivityClass, waitMethod);
         
+        // Check for exceptions after the call
+        if (env->ExceptionCheck()) {
+            env->ExceptionDescribe();
+            env->ExceptionClear();
+        }
+        
         // Clean up local references
         env->DeleteLocalRef(mainActivityClass);
+        
+        // Add a small delay to ensure the file system operations are complete
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 }
 #endif
