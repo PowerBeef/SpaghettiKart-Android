@@ -1,50 +1,32 @@
 #include "Engine.h"
 
 #ifdef __ANDROID__
-#include <jni.h>
 #include <thread>
 #include <chrono>
 
 extern "C" {
     void waitForSetupFromNative() {
-        // Get the JNI environment
-        JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
-        if (!env) {
-            SPDLOG_ERROR("Failed to get JNI environment");
-            return;
+        // Simple polling approach - wait for the file to exist
+        const std::string main_path = Ship::Context::GetPathRelativeToAppDirectory("mk64.o2r");
+        
+        SPDLOG_INFO("Waiting for mk64.o2r file selection...");
+        
+        // Poll for the file existence with a timeout
+        int timeout_seconds = 300; // 5 minutes timeout
+        int poll_count = 0;
+        
+        while (!std::filesystem::exists(main_path) && poll_count < timeout_seconds * 10) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            poll_count++;
         }
         
-        // Get the MainActivity class
-        jclass mainActivityClass = env->FindClass("com/izzy/kart/MainActivity");
-        if (!mainActivityClass) {
-            SPDLOG_ERROR("Failed to find MainActivity class");
-            env->ExceptionClear(); // Clear any pending exceptions
-            return;
+        if (std::filesystem::exists(main_path)) {
+            SPDLOG_INFO("mk64.o2r file found, continuing...");
+            // Add a small delay to ensure file operations are complete
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        } else {
+            SPDLOG_ERROR("Timeout waiting for mk64.o2r file selection");
         }
-        
-        // Get the static waitForSetupFromNative method
-        jmethodID waitMethod = env->GetStaticMethodID(mainActivityClass, "waitForSetupFromNative", "()V");
-        if (!waitMethod) {
-            SPDLOG_ERROR("Failed to find waitForSetupFromNative method");
-            env->ExceptionClear(); // Clear any pending exceptions
-            env->DeleteLocalRef(mainActivityClass);
-            return;
-        }
-        
-        // Call the Java method
-        env->CallStaticVoidMethod(mainActivityClass, waitMethod);
-        
-        // Check for exceptions after the call
-        if (env->ExceptionCheck()) {
-            env->ExceptionDescribe();
-            env->ExceptionClear();
-        }
-        
-        // Clean up local references
-        env->DeleteLocalRef(mainActivityClass);
-        
-        // Add a small delay to ensure the file system operations are complete
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 }
 #endif
