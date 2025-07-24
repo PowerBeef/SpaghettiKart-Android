@@ -2,9 +2,36 @@
 
 #ifdef __ANDROID__
 #include <jni.h>
+
 extern "C" {
-    // This function is implemented in MainActivity.java as a static method
-    void waitForSetupFromNative();
+    void waitForSetupFromNative() {
+        // Get the JNI environment
+        JNIEnv* env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+        if (!env) {
+            SPDLOG_ERROR("Failed to get JNI environment");
+            return;
+        }
+        
+        // Get the MainActivity class
+        jclass mainActivityClass = env->FindClass("com/izzy/kart/MainActivity");
+        if (!mainActivityClass) {
+            SPDLOG_ERROR("Failed to find MainActivity class");
+            return;
+        }
+        
+        // Get the static waitForSetupFromNative method
+        jmethodID waitMethod = env->GetStaticMethodID(mainActivityClass, "waitForSetupFromNative", "()V");
+        if (!waitMethod) {
+            SPDLOG_ERROR("Failed to find waitForSetupFromNative method");
+            return;
+        }
+        
+        // Call the Java method
+        env->CallStaticVoidMethod(mainActivityClass, waitMethod);
+        
+        // Clean up local references
+        env->DeleteLocalRef(mainActivityClass);
+    }
 }
 #endif
 
