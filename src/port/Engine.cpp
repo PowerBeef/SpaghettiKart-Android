@@ -1,5 +1,13 @@
 #include "Engine.h"
 
+#ifdef __ANDROID__
+#include <jni.h>
+extern "C" {
+    // This function is implemented in MainActivity.java as a static method
+    void waitForSetupFromNative();
+}
+#endif
+
 #include "StringHelper.h"
 #include "GameExtractor.h"
 #include "ui/ImguiUI.h"
@@ -91,24 +99,34 @@ GameEngine::GameEngine() {
     AllocConsole();
 #endif
 
-if (std::filesystem::exists(main_path)) {
-    archiveFiles.push_back(main_path);
-} else {
 #ifdef __ANDROID__
-    // On Android, just continue (do nothing, don't show popup or exit)
-#else
-    if (ShowYesNoBox("No O2R Files", "No O2R files found. Generate one now?") == IDYES) {
-        if (!GenAssetFile()) {
-            ShowMessage("Error", "An error occured, no O2R file was generated.\n\nExiting...");
-            exit(1);
-        } else {
-            archiveFiles.push_back(main_path);
-        }
+    // On Android, always wait for the user to select the file through the UI first
+    extern void waitForSetupFromNative();
+    waitForSetupFromNative();
+    
+    // After waiting, check if the file exists
+    if (std::filesystem::exists(main_path)) {
+        archiveFiles.push_back(main_path);
     } else {
+        SPDLOG_ERROR("mk64.o2r file still not found after user selection");
         exit(1);
     }
+#else
+    if (std::filesystem::exists(main_path)) {
+        archiveFiles.push_back(main_path);
+    } else {
+        if (ShowYesNoBox("No O2R Files", "No O2R files found. Generate one now?") == IDYES) {
+            if (!GenAssetFile()) {
+                ShowMessage("Error", "An error occured, no O2R file was generated.\n\nExiting...");
+                exit(1);
+            } else {
+                archiveFiles.push_back(main_path);
+            }
+        } else {
+            exit(1);
+        }
+    }
 #endif
-}
 
     if (std::filesystem::exists(assets_path)) {
         archiveFiles.push_back(assets_path);
