@@ -3,12 +3,7 @@
 
 #include <libultraship.h>
 #include <common_structs.h>
-
-#if defined(__ANDROID__)
-    #include <SDL_net.h>
-#else
-    #include <SDL2/SDL_net.h>
-#endif
+#include <SDL2/SDL_net.h>
 
 #define NETWORK_MAX_PLAYERS 8
 #define NETWORK_USERNAME_LENGTH 32
