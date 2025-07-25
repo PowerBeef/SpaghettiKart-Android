@@ -1,4 +1,4 @@
-name: GenerateBuilds
+name: Android Build
 
 on:
   push:
