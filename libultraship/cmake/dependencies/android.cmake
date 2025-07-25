@@ -14,7 +14,7 @@ endif()
 
 # =========== SDL2_net ===========
 find_package(SDL2_net QUIET)
-if (NOT SDL2_NET_FOUND)
+if (NOT ${SDL2_NET_FOUND})
     FetchContent_Declare(
         SDL2_net
         GIT_REPOSITORY https://github.com/libsdl-org/SDL_net.git
