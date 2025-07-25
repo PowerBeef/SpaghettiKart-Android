@@ -249,6 +249,7 @@ list(FILTER ALL_FILES EXCLUDE REGEX ".*.inc.c")
 list(FILTER ALL_FILES EXCLUDE REGEX "./src/debug/crash_screen_enhancement.c")
 
 if(ANDROID)
+    include(libultraship/cmake/dependencies/android.cmake)
     add_library(${PROJECT_NAME} SHARED ${ALL_FILES})
 elseif(CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set(IOS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libultraship/ios)
