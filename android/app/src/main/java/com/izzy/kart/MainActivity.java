@@ -47,6 +47,7 @@ static {
     private static final int FILE_PICKER_REQUEST_CODE = 0;
     private File targetRootFolder;
     private File romTargetFile; // Will hold the mk64.o2r destination
+    private volatile boolean romFileReady = false;
 
     public static String getSaveDir() {
     File dir = new File(Environment.getExternalStorageDirectory(), "Spaghetti-Kart");
@@ -209,28 +210,82 @@ public void checkAndSetupFiles() {
 
     private void handleRomFileSelection(Uri selectedFileUri) {
         if (selectedFileUri == null) {
-            showToast("No ROM selected.");
+            showToast("No mk64.o2r file selected.");
             return;
         }
 
+        // Show progress to user
+        showToast("Copying mk64.o2r file...");
+
         try (InputStream in = getContentResolver().openInputStream(selectedFileUri);
-             OutputStream out = new FileOutputStream(romTargetFile)) {
-            byte[] buffer = new byte[4096];
+             FileOutputStream out = new FileOutputStream(romTargetFile)) {
+            
+            byte[] buffer = new byte[8192]; // Larger buffer for better performance
             int bytesRead;
             while ((bytesRead = in.read(buffer)) != -1) {
                 out.write(buffer, 0, bytesRead);
             }
             
-            // Add delay to ensure file is fully written and avoid race conditions
-            new android.os.Handler().postDelayed(() -> {
-                nativeHandleSelectedFile(romTargetFile.getAbsolutePath());
-                setupLatch.countDown();
-            }, 1000); // 1000ms delay to prevent crash
+            // Ensure all data is written to disk
+            out.flush();
+            out.getFD().sync(); // Force sync to disk
+            
+            Log.i("MainActivity", "mk64.o2r file copied successfully, size: " + romTargetFile.length() + " bytes");
+            
+            // Use a more robust delay and thread safety
+            new android.os.Handler(getMainLooper()).postDelayed(() -> {
+                try {
+                    // Double-check file exists and has content
+                    if (romTargetFile.exists() && romTargetFile.length() > 0) {
+                        Log.i("MainActivity", "Calling nativeHandleSelectedFile with: " + romTargetFile.getAbsolutePath());
+                        
+                        // Try calling native method with retry logic
+                        tryNativeFileCall(romTargetFile.getAbsolutePath(), 0);
+                    } else {
+                        Log.e("MainActivity", "mk64.o2r file verification failed");
+                        showToast("mk64.o2r file verification failed");
+                    }
+                } catch (Exception e) {
+                    Log.e("MainActivity", "Error in native file handling", e);
+                    showToast("Error loading mk64.o2r file");
+                }
+            }, 2000); // Increased to 2 seconds to ensure SDL is fully ready
             
         } catch (IOException e) {
-            showToast("Failed to copy mk64.o2r");
-            Log.e("MainActivity", "Error copying ROM file", e);
+            Log.e("MainActivity", "Error copying mk64.o2r file", e);
+            showToast("Failed to copy mk64.o2r: " + e.getMessage());
         }
+    }
+
+    private void tryNativeFileCall(String filePath, int attempt) {
+        final int maxAttempts = 5;
+        final int baseDelay = 500; // Start with 500ms
+        
+        if (attempt >= maxAttempts) {
+            Log.e("MainActivity", "Failed to call native method after " + maxAttempts + " attempts");
+            showToast("Failed to load mk64.o2r after multiple attempts. Please restart the app.");
+            return;
+        }
+        
+        runOnUiThread(() -> {
+            try {
+                Log.i("MainActivity", "Attempting native call, attempt " + (attempt + 1));
+                nativeHandleSelectedFile(filePath);
+                setupLatch.countDown();
+                romFileReady = true;
+                showToast("mk64.o2r loaded successfully!");
+                Log.i("MainActivity", "Native call successful on attempt " + (attempt + 1));
+            } catch (UnsatisfiedLinkError e) {
+                Log.w("MainActivity", "Native library not ready on attempt " + (attempt + 1) + ", retrying...", e);
+                // Retry with exponential backoff
+                new android.os.Handler(getMainLooper()).postDelayed(() -> {
+                    tryNativeFileCall(filePath, attempt + 1);
+                }, baseDelay * (1 << attempt)); // Exponential backoff: 500ms, 1s, 2s, 4s, 8s
+            } catch (Exception e) {
+                Log.e("MainActivity", "Native call failed on attempt " + (attempt + 1), e);
+                showToast("Failed to load mk64.o2r: " + e.getMessage());
+            }
+        });
     }
 
     // Native methods
