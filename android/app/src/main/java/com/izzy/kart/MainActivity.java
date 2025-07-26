@@ -308,6 +308,13 @@ public void checkAndSetupFiles() {
                     case MotionEvent.ACTION_DOWN:
                         onNativeKeyDown(KeyEvent.KEYCODE_ESCAPE);
                         button.setPressed(true);
+                        // Toggle menu state and controls
+                        MenuOpen = !MenuOpen;
+                        if (MenuOpen) {
+                            DisableAllControls();
+                        } else {
+                            EnableAllControls();
+                        }
                         return true;
                     case MotionEvent.ACTION_UP:
                         onNativeKeyUp(KeyEvent.KEYCODE_ESCAPE);
@@ -344,6 +351,8 @@ public void checkAndSetupFiles() {
         button.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
+                if (!AllControlsEnabled) return false;
+                
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
                         setButton(buttonNum, true);
@@ -366,6 +375,8 @@ public void checkAndSetupFiles() {
         button.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
+                if (!AllControlsEnabled) return false;
+                
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
                         setAxis(buttonNum, direction < 0 ? Short.MAX_VALUE : Short.MIN_VALUE);
@@ -385,12 +396,24 @@ public void checkAndSetupFiles() {
     }
 
     boolean TouchAreaEnabled = true;
+    boolean MenuOpen = false;
+    boolean AllControlsEnabled = true;
 
     void DisableTouchArea() {
         TouchAreaEnabled = false;
     }
 
     void EnableTouchArea() {
+        TouchAreaEnabled = true;
+    }
+
+    void DisableAllControls() {
+        AllControlsEnabled = false;
+        TouchAreaEnabled = false;
+    }
+
+    void EnableAllControls() {
+        AllControlsEnabled = true;
         TouchAreaEnabled = true;
     }
 
@@ -428,7 +451,7 @@ public void checkAndSetupFiles() {
                         setCameraState(1, 0.0f);
                         break;
                 }
-                return TouchAreaEnabled;
+                return TouchAreaEnabled && AllControlsEnabled;
             }
         });
     }
@@ -441,6 +464,8 @@ public void checkAndSetupFiles() {
             joystickLayout.setOnTouchListener(new View.OnTouchListener() {
                 @Override
                 public boolean onTouch(View v, MotionEvent event) {
+                    if (!AllControlsEnabled) return false;
+                    
                     switch (event.getAction()) {
                         case MotionEvent.ACTION_DOWN:
                         case MotionEvent.ACTION_MOVE:
