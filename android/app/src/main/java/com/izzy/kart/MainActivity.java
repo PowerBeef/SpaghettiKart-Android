@@ -225,7 +225,7 @@ public void checkAndSetupFiles() {
             new android.os.Handler().postDelayed(() -> {
                 nativeHandleSelectedFile(romTargetFile.getAbsolutePath());
                 setupLatch.countDown();
-            }, 500); // 500ms delay to prevent crash
+            }, 1000); // 1000ms delay to prevent crash
             
         } catch (IOException e) {
             showToast("Failed to copy mk64.o2r");
@@ -357,13 +357,7 @@ public void checkAndSetupFiles() {
         });
     }
 
-    // Generic touch handler interface to reduce code duplication
-    private interface TouchHandler {
-        void onPress();
-        void onRelease();
-    }
-
-    private void setupButtonTouchListener(Button button, TouchHandler handler) {
+    private void addTouchListener(Button button, int buttonNum) {
         button.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
@@ -371,15 +365,15 @@ public void checkAndSetupFiles() {
                 
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
-                        handler.onPress();
+                        setButton(buttonNum, true);
                         button.setPressed(true);
                         return true;
                     case MotionEvent.ACTION_UP:
-                        handler.onRelease();
+                        setButton(buttonNum, false);
                         button.setPressed(false);
                         return true;
                     case MotionEvent.ACTION_CANCEL:
-                        handler.onRelease();
+                        setButton(buttonNum, false);
                         return true;
                 }
                 return false;
@@ -387,31 +381,26 @@ public void checkAndSetupFiles() {
         });
     }
 
-    private void addTouchListener(Button button, int buttonNum) {
-        setupButtonTouchListener(button, new TouchHandler() {
-            @Override
-            public void onPress() {
-                setButton(buttonNum, true);
-            }
-            
-            @Override
-            public void onRelease() {
-                setButton(buttonNum, false);
-            }
-        });
-    }
-
     private void setupCButtons(Button button, int buttonNum, int direction) {
-        final short pressValue = direction < 0 ? Short.MAX_VALUE : Short.MIN_VALUE;
-        setupButtonTouchListener(button, new TouchHandler() {
+        button.setOnTouchListener(new View.OnTouchListener() {
             @Override
-            public void onPress() {
-                setAxis(buttonNum, pressValue);
-            }
-            
-            @Override
-            public void onRelease() {
-                setAxis(buttonNum, (short) 0);
+            public boolean onTouch(View v, MotionEvent event) {
+                if (!AllControlsEnabled) return false;
+                
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        setAxis(buttonNum, direction < 0 ? Short.MAX_VALUE : Short.MIN_VALUE);
+                        button.setPressed(true);
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                        setAxis(buttonNum, (short) 0);
+                        button.setPressed(false);
+                        return true;
+                    case MotionEvent.ACTION_CANCEL:
+                        setAxis(buttonNum, (short) 0);
+                        return true;
+                }
+                return false;
             }
         });
     }
