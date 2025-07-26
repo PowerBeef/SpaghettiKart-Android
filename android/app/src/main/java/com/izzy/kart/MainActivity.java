@@ -153,29 +153,32 @@ public void checkAndSetupFiles() {
     }
 }
 
-    // Helper to copy entire asset folder if missing
+    // Helper methods for asset copying
     private void copyAssetFolder(String assetFolderName, String destPath) {
         try {
             File dest = new File(destPath);
             if (!dest.exists()) dest.mkdirs();
             AssetCopyUtil.copyAssetsToExternal(this, assetFolderName, destPath);
-            runOnUiThread(() -> Toast.makeText(this, assetFolderName + " copied", Toast.LENGTH_SHORT).show());
+            showToast(assetFolderName + " copied");
         } catch (IOException e) {
-            runOnUiThread(() -> Toast.makeText(this, "Error copying " + assetFolderName, Toast.LENGTH_LONG).show());
+            showToast("Error copying " + assetFolderName);
         }
     }
 
-    // Helper to copy a single file from assets if missing
     private void copyAssetFile(String assetFileName, File destFile) {
         try (InputStream in = getAssets().open(assetFileName);
              OutputStream out = new FileOutputStream(destFile)) {
             byte[] buffer = new byte[4096];
             int read;
             while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
-            runOnUiThread(() -> Toast.makeText(this, assetFileName + " copied", Toast.LENGTH_SHORT).show());
+            showToast(assetFileName + " copied");
         } catch (IOException e) {
-            runOnUiThread(() -> Toast.makeText(this, "Error copying " + assetFileName, Toast.LENGTH_LONG).show());
+            showToast("Error copying " + assetFileName);
         }
+    }
+
+    private void showToast(String message) {
+        runOnUiThread(() -> Toast.makeText(this, message, Toast.LENGTH_SHORT).show());
     }
 
     @Override
@@ -183,26 +186,7 @@ public void checkAndSetupFiles() {
         super.onActivityResult(requestCode, resultCode, data);
 
         if (requestCode == FILE_PICKER_REQUEST_CODE && resultCode == RESULT_OK && data != null) {
-            // User picked ROM file for mk64.o2r
-            Uri selectedFileUri = data.getData();
-
-            if (selectedFileUri != null) {
-                try (InputStream in = getContentResolver().openInputStream(selectedFileUri);
-                     OutputStream out = new FileOutputStream(romTargetFile)) {
-                    byte[] buffer = new byte[4096];
-                    int bytesRead;
-                    while ((bytesRead = in.read(buffer)) != -1) out.write(buffer, 0, bytesRead);
-                } catch (IOException e) {
-                    runOnUiThread(() -> Toast.makeText(this, "Failed to copy mk64.o2r", Toast.LENGTH_LONG).show());
-                    // finish();
-                    return;
-                }
-                nativeHandleSelectedFile(romTargetFile.getAbsolutePath());
-                setupLatch.countDown();
-            } else {
-                runOnUiThread(() -> Toast.makeText(this, "No ROM selected.", Toast.LENGTH_LONG).show());
-                // finish();
-            }
+            handleRomFileSelection(data.getData());
         } else if (requestCode == STORAGE_PERMISSION_REQUEST_CODE) {
             // Handle MANAGE_EXTERNAL_STORAGE result
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -221,6 +205,32 @@ public void checkAndSetupFiles() {
         intent.setType("*/*");
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         startActivityForResult(intent, FILE_PICKER_REQUEST_CODE);
+    }
+
+    private void handleRomFileSelection(Uri selectedFileUri) {
+        if (selectedFileUri == null) {
+            showToast("No ROM selected.");
+            return;
+        }
+
+        try (InputStream in = getContentResolver().openInputStream(selectedFileUri);
+             OutputStream out = new FileOutputStream(romTargetFile)) {
+            byte[] buffer = new byte[4096];
+            int bytesRead;
+            while ((bytesRead = in.read(buffer)) != -1) {
+                out.write(buffer, 0, bytesRead);
+            }
+            
+            // Add delay to ensure file is fully written and avoid race conditions
+            new android.os.Handler().postDelayed(() -> {
+                nativeHandleSelectedFile(romTargetFile.getAbsolutePath());
+                setupLatch.countDown();
+            }, 500); // 500ms delay to prevent crash
+            
+        } catch (IOException e) {
+            showToast("Failed to copy mk64.o2r");
+            Log.e("MainActivity", "Error copying ROM file", e);
+        }
     }
 
     // Native methods
@@ -347,7 +357,13 @@ public void checkAndSetupFiles() {
         });
     }
 
-    private void addTouchListener(Button button, int buttonNum) {
+    // Generic touch handler interface to reduce code duplication
+    private interface TouchHandler {
+        void onPress();
+        void onRelease();
+    }
+
+    private void setupButtonTouchListener(Button button, TouchHandler handler) {
         button.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
@@ -355,64 +371,70 @@ public void checkAndSetupFiles() {
                 
                 switch (event.getAction()) {
                     case MotionEvent.ACTION_DOWN:
-                        setButton(buttonNum, true);
+                        handler.onPress();
                         button.setPressed(true);
                         return true;
                     case MotionEvent.ACTION_UP:
-                        setButton(buttonNum, false);
+                        handler.onRelease();
                         button.setPressed(false);
                         return true;
                     case MotionEvent.ACTION_CANCEL:
-                        setButton(buttonNum, false);
+                        handler.onRelease();
                         return true;
                 }
                 return false;
+            }
+        });
+    }
+
+    private void addTouchListener(Button button, int buttonNum) {
+        setupButtonTouchListener(button, new TouchHandler() {
+            @Override
+            public void onPress() {
+                setButton(buttonNum, true);
+            }
+            
+            @Override
+            public void onRelease() {
+                setButton(buttonNum, false);
             }
         });
     }
 
     private void setupCButtons(Button button, int buttonNum, int direction) {
-        button.setOnTouchListener(new View.OnTouchListener() {
+        final short pressValue = direction < 0 ? Short.MAX_VALUE : Short.MIN_VALUE;
+        setupButtonTouchListener(button, new TouchHandler() {
             @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                if (!AllControlsEnabled) return false;
-                
-                switch (event.getAction()) {
-                    case MotionEvent.ACTION_DOWN:
-                        setAxis(buttonNum, direction < 0 ? Short.MAX_VALUE : Short.MIN_VALUE);
-                        button.setPressed(true);
-                        return true;
-                    case MotionEvent.ACTION_UP:
-                        setAxis(buttonNum, (short) 0);
-                        button.setPressed(false);
-                        return true;
-                    case MotionEvent.ACTION_CANCEL:
-                        setAxis(buttonNum, (short) 0);
-                        return true;
-                }
-                return false;
+            public void onPress() {
+                setAxis(buttonNum, pressValue);
+            }
+            
+            @Override
+            public void onRelease() {
+                setAxis(buttonNum, (short) 0);
             }
         });
     }
 
-    boolean TouchAreaEnabled = true;
-    boolean MenuOpen = false;
-    boolean AllControlsEnabled = true;
+    // Control state management
+    private boolean TouchAreaEnabled = true;
+    private boolean MenuOpen = false;
+    private boolean AllControlsEnabled = true;
 
-    void DisableTouchArea() {
+    private void DisableTouchArea() {
         TouchAreaEnabled = false;
     }
 
-    void EnableTouchArea() {
+    private void EnableTouchArea() {
         TouchAreaEnabled = true;
     }
 
-    void DisableAllControls() {
+    private void DisableAllControls() {
         AllControlsEnabled = false;
         TouchAreaEnabled = false;
     }
 
-    void EnableAllControls() {
+    private void EnableAllControls() {
         AllControlsEnabled = true;
         TouchAreaEnabled = true;
     }
