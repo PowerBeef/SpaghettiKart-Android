@@ -233,7 +233,7 @@ public void checkAndSetupFiles() {
     // Controller overlay and touch handling
     private Button buttonA, buttonB, buttonX, buttonY;
     private Button buttonDpadUp, buttonDpadDown, buttonDpadLeft, buttonDpadRight;
-    private Button buttonLB, buttonRB, buttonZ, buttonStart, buttonBack, buttonToggle;
+    private Button buttonLB, buttonRB, buttonZ, buttonStart, buttonBack, buttonToggle, buttonMenu;
     private FrameLayout leftJoystick;
     private ImageView leftJoystickKnob;
     private View overlayView;
@@ -267,6 +267,7 @@ public void checkAndSetupFiles() {
 
         buttonStart = overlayView.findViewById(R.id.buttonStart);
         buttonBack = overlayView.findViewById(R.id.buttonBack);
+        buttonMenu = overlayView.findViewById(R.id.buttonMenu);
 
         buttonToggle = overlayView.findViewById(R.id.buttonToggle);
 
@@ -291,6 +292,7 @@ public void checkAndSetupFiles() {
 
         addTouchListener(buttonStart, ControllerButtons.BUTTON_START);
         addTouchListener(buttonBack, ControllerButtons.BUTTON_BACK);
+        addTouchListener(buttonMenu, ControllerButtons.BUTTON_MENU);
 
         setupJoystick(leftJoystick, leftJoystickKnob, true);
         setupLookAround(rightScreenArea);
