@@ -10,7 +10,7 @@ public class ControllerButtons {
     public static final int BUTTON_RB = -5; // Right Bumper
     public static final int BUTTON_BACK = 4;
     public static final int BUTTON_START = 6;
-    public static final int BUTTON_MENU = 27; // Escape/Menu button
+    public static final int BUTTON_MENU = 111; // Escape/Menu button (KeyEvent.KEYCODE_ESCAPE)
     public static final int BUTTON_DPAD_UP = 11;
     public static final int BUTTON_DPAD_DOWN = 12;
     public static final int BUTTON_DPAD_LEFT = 13;

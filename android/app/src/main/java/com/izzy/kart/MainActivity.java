@@ -32,6 +32,7 @@ import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ImageView;
+import android.view.KeyEvent;
 
 import java.util.concurrent.Executors;
 import android.app.AlertDialog;
@@ -292,11 +293,33 @@ public void checkAndSetupFiles() {
 
         addTouchListener(buttonStart, ControllerButtons.BUTTON_START);
         addTouchListener(buttonBack, ControllerButtons.BUTTON_BACK);
-        addTouchListener(buttonMenu, ControllerButtons.BUTTON_MENU);
+        setupMenuButton(buttonMenu);
 
         setupJoystick(leftJoystick, leftJoystickKnob, true);
         setupLookAround(rightScreenArea);
         setupToggleButton(buttonToggle, buttonGroup);
+    }
+
+    private void setupMenuButton(Button button) {
+        button.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        onNativeKeyDown(KeyEvent.KEYCODE_ESCAPE);
+                        button.setPressed(true);
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                        onNativeKeyUp(KeyEvent.KEYCODE_ESCAPE);
+                        button.setPressed(false);
+                        return true;
+                    case MotionEvent.ACTION_CANCEL:
+                        onNativeKeyUp(KeyEvent.KEYCODE_ESCAPE);
+                        return true;
+                }
+                return false;
+            }
+        });
     }
 
     private void setupToggleButton(Button button, ViewGroup uiGroup) {
