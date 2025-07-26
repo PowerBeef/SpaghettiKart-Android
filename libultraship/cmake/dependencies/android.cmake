@@ -8,22 +8,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(bzip2)
 
-
-# =========== lzma (xz) ===========
-FetchContent_Declare(
-    xz
-    GIT_REPOSITORY https://github.com/tukaani-project/xz.git
-    GIT_TAG v5.6.1
-)
-FetchContent_MakeAvailable(xz)
-
-# =========== zstd ===========
-FetchContent_Declare(
-    zstd
-    GIT_REPOSITORY https://github.com/facebook/zstd.git
-    GIT_TAG v1.5.6
-)
-FetchContent_MakeAvailable(zstd)
 #=================== SDL2 ===================
 find_package(SDL2 QUIET)
 if (NOT ${SDL2_FOUND})
@@ -109,13 +93,7 @@ if (NOT libzip_FOUND)
     set(BUILD_SHARED_LIBS OFF)
     set(BZIP2_LIBRARY ${bzip2_BINARY_DIR}/libbz2.a)
     set(BZIP2_INCLUDE_DIR ${bzip2_SOURCE_DIR})
-    set(LIBLZMA_LIBRARY ${xz_BINARY_DIR}/liblzma.a)
-    set(LIBLZMA_INCLUDE_DIR ${xz_SOURCE_DIR}/src/liblzma/api)
-    set(ZSTD_LIBRARY ${zstd_BINARY_DIR}/lib/libzstd.a)
-    set(ZSTD_INCLUDE_DIR ${zstd_SOURCE_DIR}/lib)
     set(ENABLE_BZIP2 ON)
-    set(ENABLE_LZMA ON)
-    set(ENABLE_ZSTD ON)
     FetchContent_Declare(
         libzip
         GIT_REPOSITORY https://github.com/nih-at/libzip.git
