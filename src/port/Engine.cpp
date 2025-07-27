@@ -6,8 +6,28 @@
 
 extern "C" {
     void waitForSetupFromNative() {
+        // Wait for Ship context to be initialized first
+        int context_timeout = 100; // 10 seconds timeout for context
+        int context_poll_count = 0;
+        
+        while (Ship::Context::GetInstance() == nullptr && context_poll_count < context_timeout) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            context_poll_count++;
+        }
+        
+        if (Ship::Context::GetInstance() == nullptr) {
+            SPDLOG_ERROR("Ship context not initialized, cannot wait for mk64.o2r");
+            return;
+        }
+        
         // Simple polling approach - wait for the file to exist
-        const std::string main_path = Ship::Context::GetPathRelativeToAppDirectory("mk64.o2r");
+        std::string main_path;
+        try {
+            main_path = Ship::Context::GetPathRelativeToAppDirectory("mk64.o2r");
+        } catch (const std::exception& e) {
+            SPDLOG_ERROR("Failed to get mk64.o2r path: {}", e.what());
+            return;
+        }
         
         SPDLOG_INFO("Waiting for mk64.o2r file selection...");
         
