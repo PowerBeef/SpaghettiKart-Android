@@ -57,29 +57,22 @@ static {
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
         preferences = getSharedPreferences("com.izzy.kart.prefs", Context.MODE_PRIVATE);
         targetRootFolder = new File(Environment.getExternalStorageDirectory(), "Spaghetti-Kart");
         romTargetFile = new File(targetRootFolder, "mk64.o2r");
 
-        // Check if mk64.o2r exists before starting SDL
-        if (romTargetFile.exists()) {
-            // File exists, safe to start SDL
-            super.onCreate(savedInstanceState);
-            setupControllerOverlay();
-            attachController();
-            setupLatch.countDown();
+        setupControllerOverlay();
+        
+        // Check permissions and setup files
+        if (hasStoragePermission()) {
+            checkAndSetupFiles();
         } else {
-            // File missing, start SDL but delay native initialization
-            super.onCreate(savedInstanceState);
-            setupControllerOverlay();
-            
-            // Check permissions and setup files
-            if (hasStoragePermission()) {
-                checkAndSetupFiles();
-            } else {
-                requestStoragePermission();
-            }
+            requestStoragePermission();
         }
+        
+        // Always attach controller - let native code handle file waiting
+        attachController();
     }
 
     public static void waitForSetupFromNative() {
@@ -150,13 +143,17 @@ public void checkAndSetupFiles() {
     if (missingSkO2r) copyAssetFile("spaghetti.o2r", skO2rFile);
     if (missingGameControllerDb) copyAssetFile("gamecontrollerdb.txt", gameControllerDb);
     
-    // This method is only called when file is missing (from onCreate)
-    runOnUiThread(() -> new AlertDialog.Builder(this)
-        .setTitle("Missing mk64.o2r")
-        .setMessage("Please select your mk64.o2r file to continue.")
-        .setCancelable(false)
-        .setPositiveButton("Select File", (dialog, which) -> openFilePicker())
-        .show());
+    // Prompt for mk64.o2r if missing
+    if (!romTargetFile.exists()) {
+        runOnUiThread(() -> new AlertDialog.Builder(this)
+            .setTitle("Missing mk64.o2r")
+            .setMessage("Please select your mk64.o2r file to continue.")
+            .setCancelable(false)
+            .setPositiveButton("Select File", (dialog, which) -> openFilePicker())
+            .show());
+    } else {
+        setupLatch.countDown();
+    }
 }
 
     // Helper methods for asset copying
