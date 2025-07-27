@@ -373,7 +373,7 @@ jobs:
           make
           sudo make install
           cd ../..
-          # cmake -H. -Bbuild-switch -GNinja -DCMAKE_TOOLCHAIN_FILE=/opt/devkitpro/cmake/Switch.cmake -DCMAKE_BUILD_TYPE=${{ matrix.config }}
+          cmake -H. -Bbuild-switch -GNinja -DCMAKE_TOOLCHAIN_FILE=/opt/devkitpro/cmake/Switch.cmake -DCMAKE_BUILD_TYPE=${{ matrix.config }}
           cmake --build build-switch --config ${{ matrix.config }} -j3
           wget -O gamecontrollerdb.txt https://raw.githubusercontent.com/mdqinc/SDL_GameControllerDB/master/gamecontrollerdb.txt
           mv README.md readme.txt
