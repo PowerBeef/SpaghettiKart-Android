@@ -134,13 +134,26 @@ else()
     set(COMMON_CXX_FLAGS "")
 endif()
 
+# fix LTO breaks debug information on Apple/Ninja https://gitlab.kitware.com/cmake/cmake/-/issues/25202
+if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "AppleClang" AND "${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+    add_link_options("-fno-lto")
+    add_compile_options("-fno-lto")
+endif()
+
 ################################################################################
 # Global configuration types
 ################################################################################
-set(CMAKE_C_FLAGS_DEBUG "-g -DNDEBUG ${COMMON_C_FLAGS}")
-set(CMAKE_CXX_FLAGS_DEBUG "-g -DNDEBUG ${COMMON_CXX_FLAGS}")
-set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG ${COMMON_C_FLAGS}")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG ${COMMON_CXX_FLAGS}")
+if (MSVC)
+    set(CMAKE_C_FLAGS_DEBUG "/Od /Zi /DNDEBUG ${COMMON_C_FLAGS}")
+    set(CMAKE_CXX_FLAGS_DEBUG "/Od /Zi /DNDEBUG ${COMMON_CXX_FLAGS}")
+    set(CMAKE_C_FLAGS_RELEASE "/O2 /DNDEBUG ${COMMON_C_FLAGS}")
+    set(CMAKE_CXX_FLAGS_RELEASE "/O2 /DNDEBUG ${COMMON_CXX_FLAGS}")
+else()
+    set(CMAKE_C_FLAGS_DEBUG "-g -DNDEBUG ${COMMON_C_FLAGS}")
+    set(CMAKE_CXX_FLAGS_DEBUG "-g -DNDEBUG ${COMMON_CXX_FLAGS}")
+    set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG ${COMMON_C_FLAGS}")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG ${COMMON_CXX_FLAGS}")
+endif()
 
 # Set game compilation version
 set(VERSION us)
