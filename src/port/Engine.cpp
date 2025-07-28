@@ -1,36 +1,5 @@
 #include "Engine.h"
 
-#ifdef __ANDROID__
-#include <thread>
-#include <chrono>
-
-extern "C" {
-    void waitForSetupFromNative() {
-        // Simple polling approach - wait for the file to exist
-        const std::string main_path = Ship::Context::GetPathRelativeToAppDirectory("mk64.o2r");
-        
-        SPDLOG_INFO("Waiting for mk64.o2r file selection...");
-        
-        // Poll for the file existence with a timeout
-        int timeout_seconds = 300; // 5 minutes timeout
-        int poll_count = 0;
-        
-        while (!std::filesystem::exists(main_path) && poll_count < timeout_seconds * 10) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            poll_count++;
-        }
-        
-        if (std::filesystem::exists(main_path)) {
-            SPDLOG_INFO("mk64.o2r file found, continuing...");
-            // Add a small delay to ensure file operations are complete
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        } else {
-            SPDLOG_ERROR("Timeout waiting for mk64.o2r file selection");
-        }
-    }
-}
-#endif
-
 #include "StringHelper.h"
 #include "GameExtractor.h"
 #include "ui/ImguiUI.h"
@@ -83,6 +52,37 @@ float gInterpolationStep = 0.0f;
 #include "audio/internal.h"
 #include "audio/GameAudio.h"
 }
+
+#ifdef __ANDROID__
+#include <thread>
+#include <chrono>
+
+extern "C" {
+    void waitForSetupFromNative() {
+        // Simple polling approach - wait for the file to exist
+        const std::string main_path = Ship::Context::GetPathRelativeToAppDirectory("mk64.o2r");
+        
+        SPDLOG_INFO("Waiting for mk64.o2r file selection...");
+        
+        // Poll for the file existence with a timeout
+        int timeout_seconds = 300; // 5 minutes timeout
+        int poll_count = 0;
+        
+        while (!std::filesystem::exists(main_path) && poll_count < timeout_seconds * 10) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            poll_count++;
+        }
+        
+        if (std::filesystem::exists(main_path)) {
+            SPDLOG_INFO("mk64.o2r file found, continuing...");
+            // Add a small delay to ensure file operations are complete
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        } else {
+            SPDLOG_ERROR("Timeout waiting for mk64.o2r file selection");
+        }
+    }
+}
+#endif
 
 Fast::Interpreter* GetInterpreter() {
     return static_pointer_cast<Fast::Fast3dWindow>(Ship::Context::GetInstance()->GetWindow())
