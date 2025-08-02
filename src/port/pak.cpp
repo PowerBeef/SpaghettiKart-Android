@@ -4,25 +4,23 @@
 #include <libultraship.h>
 #include <libultraship/libultra.h>
 #include <save.h>
+#include <cstdio>
 
 #define MAX_FILES 16
 #define EXT_NAME_SIZE 4
 #define GAME_NAME_SIZE 16
 
 typedef struct ControllerPak {
-    std::fstream header;
-    std::fstream file;
+    FILE* header;
+    FILE* file;
 } ControllerPak;
 
 bool Pfs_PakHeader_Write(u32* file_size, u32* game_code, u16* company_code, u8* ext_name, u8* game_name, u8 fileIndex) {
     ControllerPak pak;
 
-    pak.header.open("controllerPak_header.sav", std::ios::binary | std::ios::in | std::ios::out);
+    pak.header = fopen("controllerPak_header.sav", "w+b");
 
-    if (!pak.header.good()) {
-        return false;
-    }
-    if (!pak.header.is_open()) {
+    if (!pak.header) {
         return false;
     }
 
@@ -30,22 +28,22 @@ bool Pfs_PakHeader_Write(u32* file_size, u32* game_code, u16* company_code, u8* 
     u32 seek = fileIndex * sizeof(OSPfsState);
 
     // file_size
-    pak.header.seekp(seek + 0x0, std::ios::beg);
-    pak.header.write((char*) file_size, 4);
+    fseek(pak.header, seek + 0x00, SEEK_SET);
+    fwrite(file_size, 1, 4, pak.header);
     // game_code
-    pak.header.seekp(seek + 0x4, std::ios::beg);
-    pak.header.write((char*) game_code, 4);
+    fseek(pak.header, seek + 0x04, SEEK_SET);
+    fwrite(game_code, 1, 4, pak.header);
     // company_code
-    pak.header.seekp(seek + 0x08, std::ios::beg);
-    pak.header.write((char*) company_code, 2);
+    fseek(pak.header, seek + 0x08, SEEK_SET);
+    fwrite(company_code, 1, 2, pak.header);
     // ext_name
-    pak.header.seekp(seek + 0x0C, std::ios::beg);
-    pak.header.write((char*) ext_name, EXT_NAME_SIZE);
+    fseek(pak.header, seek + 0x0C, SEEK_SET);
+    fwrite(ext_name, 1, EXT_NAME_SIZE, pak.header);
     // game_name
-    pak.header.seekp(seek + 0x10, std::ios::beg);
-    pak.header.write((char*) game_name, GAME_NAME_SIZE);
+    fseek(pak.header, seek + 0x10, SEEK_SET);
+    fwrite(game_name, 1, GAME_NAME_SIZE, pak.header);
+    fclose(pak.header);
 
-    pak.header.close();
     return true;
 }
 
@@ -53,12 +51,9 @@ bool Pfs_PakHeader_Read(u32* file_size, u32* game_code, u16* company_code, char*
                         u8 fileIndex) {
     ControllerPak pak;
 
-    pak.header.open("controllerPak_header.sav", std::ios::binary | std::ios::in | std::ios::out);
+    pak.header = fopen("controllerPak_header.sav", "rb");
 
-    if (!pak.header.good()) {
-        return false;
-    }
-    if (!pak.header.is_open()) {
+    if(!pak.header) {
         return false;
     }
 
@@ -66,22 +61,22 @@ bool Pfs_PakHeader_Read(u32* file_size, u32* game_code, u16* company_code, char*
     u32 seek = fileIndex * sizeof(OSPfsState);
 
     // file_size
-    pak.header.seekg(seek + 0x0, std::ios::beg);
-    pak.header.read((char*) file_size, 4);
+    fseek(pak.header, seek + 0x00, SEEK_SET);
+    fread(file_size, 1, 4, pak.header);
     // game_code
-    pak.header.seekg(seek + 0x4, std::ios::beg);
-    pak.header.read((char*) game_code, 4);
+    fseek(pak.header, seek + 0x04, SEEK_SET);
+    fread(game_code, 1, 4, pak.header);
     // company_code
-    pak.header.seekg(seek + 0x08, std::ios::beg);
-    pak.header.read((char*) company_code, 2);
+    fseek(pak.header, seek + 0x08, SEEK_SET);
+    fread(company_code, 1, 2, pak.header);
     // ext_name
-    pak.header.seekg(seek + 0x0C, std::ios::beg);
-    pak.header.read((char*) ext_name, EXT_NAME_SIZE);
+    fseek(pak.header, seek + 0x0C, SEEK_SET);
+    fread(ext_name, 1, EXT_NAME_SIZE, pak.header);
     // game_name
-    pak.header.seekg(seek + 0x10, std::ios::beg);
-    pak.header.read((char*) game_name, GAME_NAME_SIZE);
+    fseek(pak.header, seek + 0x10, SEEK_SET);
+    fread(game_name, 1, GAME_NAME_SIZE, pak.header);
+    fclose(pak.header);
 
-    pak.header.close();
     return true;
 }
 
@@ -97,10 +92,15 @@ extern "C" s32 osPfsInit(OSMesgQueue* queue, OSPfs* pfs, int channel) {
 
     ControllerPak pak;
 
+    pak.header = fopen("controllerPak_header.sav", "rb");
+
     // If a header file doesn't exist, create it.
-    if (!std::filesystem::exists("controllerPak_header.sav")) {
-        pak.header.open("controllerPak_header.sav", std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);
-        pak.header.close();
+    if(!pak.header) {
+        pak.header = fopen("controllerPak_header.sav", "w+b");
+        if (!pak.header) {
+            return PFS_ERR_INVALID;
+        }
+        fclose(pak.header);
     }
 
     return PFS_NO_ERROR;
@@ -109,12 +109,9 @@ extern "C" s32 osPfsInit(OSMesgQueue* queue, OSPfs* pfs, int channel) {
 extern "C" s32 osPfsFreeBlocks(OSPfs* pfs, s32* bytes_not_used) {
     ControllerPak pak;
 
-    pak.header.open("controllerPak_header.sav", std::ios::binary | std::ios::in | std::ios::out);
+    pak.header = fopen("controllerPak_header.sav", "rb");
 
-    if (!pak.header.good()) {
-        return PFS_ERR_INVALID;
-    }
-    if (!pak.header.is_open()) {
+    if (!pak.header) {
         return PFS_ERR_INVALID;
     }
 
@@ -137,7 +134,7 @@ extern "C" s32 osPfsFreeBlocks(OSPfs* pfs, s32* bytes_not_used) {
         }
     }
 
-    pak.header.close();
+    fclose(pak.header);
 
     *bytes_not_used = (123 - usedSpace) << 8;
 
@@ -183,7 +180,11 @@ extern "C" s32 osPfsAllocateFile(OSPfs* pfs, u16 company_code, u32 game_code, u8
     /* Create empty file */
     char filename[100];
     sprintf(filename, "controllerPak_file_%d.sav", freeFileIndex);
-    pak.file.open(filename, std::ios::binary | std::ios::in | std::ios::out | std::ios::trunc);
+    pak.file = fopen(filename, "w+b");
+
+    if (!pak.file) {
+        return PFS_ERR_INVALID;
+    }
 
     file_size_in_bytes = (file_size_in_bytes + 31) & ~31;
 
@@ -192,12 +193,10 @@ extern "C" s32 osPfsAllocateFile(OSPfs* pfs, u16 company_code, u32 game_code, u8
         zero_block[i] = 0;
     }
 
-    pak.file.seekp(0, std::ios::beg);
-    pak.file.write(zero_block, file_size_in_bytes);
-
+    fseek(pak.file, 0, SEEK_SET);
+    fwrite(zero_block, 1, file_size_in_bytes, pak.file);
     free(zero_block);
-
-    pak.file.close();
+    fclose(pak.file);
 
     *file_no = freeFileIndex;
 
@@ -217,7 +216,10 @@ extern "C" s32 osPfsFileState(OSPfs* pfs, s32 file_no, OSPfsState* state) {
 
     char filename[100];
     sprintf(filename, "controllerPak_file_%d.sav", file_no);
-    if (!std::filesystem::exists(filename)) {
+    FILE* file = fopen(filename, "rb");
+    if (file) {
+        fclose(file);
+    } else {
         return PFS_ERR_INVALID;
     }
 
@@ -276,27 +278,21 @@ extern "C" s32 osPfsReadWriteFile(OSPfs* pfs, s32 file_no, u8 flag, int offset, 
 
     char filename[100];
     sprintf(filename, "controllerPak_file_%d.sav", file_no);
-    pak.file.open(filename, std::ios::binary | std::ios::in | std::ios::out);
+    pak.file = fopen(filename, flag == 0 ? "r+b" : "w+b");
 
-    if (!std::filesystem::exists(filename)) {
-        return PFS_ERR_INVALID;
-    }
-    if (!pak.file.good()) {
-        return PFS_ERR_INVALID;
-    }
-    if (!pak.file.is_open()) {
+    if (!pak.file) {
         return PFS_ERR_INVALID;
     }
 
     if (flag == 0) {
-        pak.file.seekg(offset, std::ios::beg);
-        pak.file.read((char*) data_buffer, size_in_bytes);
+        fseek(pak.file, offset, SEEK_SET);
+        fread(data_buffer, 1, size_in_bytes, pak.file);
     } else {
-        pak.file.seekp(offset, std::ios::beg);
-        pak.file.write((char*) data_buffer, size_in_bytes);
+        fseek(pak.file, offset, SEEK_SET);
+        fwrite(data_buffer, 1, size_in_bytes, pak.file);
     }
 
-    pak.file.close();
+    fclose(pak.file);
 
     return PFS_NO_ERROR;
 }
@@ -349,13 +345,9 @@ extern "C" s32 osPfsDeleteFile(OSPfs* pfs, u16 company_code, u32 game_code, u8* 
             if ((game_code == game_code_) && (strcmp((const char*) game_name, (const char*) game_name_) == 0) &&
                 strcmp((const char*) ext_name, (const char*) ext_name_) == 0) {
                 // File found
+                pak.header = fopen("controllerPak_header.sav", "w+b");
 
-                pak.header.open("controllerPak_header.sav", std::ios::binary | std::ios::in | std::ios::out);
-
-                if (!pak.header.good()) {
-                    return PFS_ERR_INVALID;
-                }
-                if (!pak.header.is_open()) {
+                if(!pak.header) {
                     return PFS_ERR_INVALID;
                 }
 
@@ -366,15 +358,16 @@ extern "C" s32 osPfsDeleteFile(OSPfs* pfs, u16 company_code, u32 game_code, u8* 
                 for (size_t i = 0; i < sizeof(OSPfsState); i++) {
                     zero_block[i] = 0;
                 }
-                pak.header.seekp(seek + 0x0, std::ios::beg);
-                pak.header.write((char*) zero_block, sizeof(OSPfsState));
+
+                fseek(pak.header, seek + 0x0, SEEK_SET);
+                fwrite(zero_block, 1, sizeof(OSPfsState), pak.header);
 
                 free(zero_block);
 
-                pak.header.close();
-
+                fclose(pak.header);
                 char filename[100];
                 sprintf(filename, "controllerPak_file_%d.sav", i);
+
                 remove(filename);
 
                 return PFS_NO_ERROR;
