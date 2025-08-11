@@ -313,6 +313,9 @@ public void checkAndSetupFiles() {
 
             if (mk64O2rUri != null) {
                 // Found mk64.o2r in the selected folder
+                // Make the URI effectively final for lambda expressions
+                final Uri finalMk64O2rUri = mk64O2rUri;
+                
                 // Ask user if they want to use this folder as their main Spaghetti Kart folder
                 runOnUiThread(() -> new AlertDialog.Builder(this)
                     .setTitle("mk64.o2r found!")
@@ -327,10 +330,10 @@ public void checkAndSetupFiles() {
                             romTargetFile = new File(targetRootFolder, "mk64.o2r");
                             showToast("Folder updated! Using: " + folderPath);
                         }
-                        handleRomFileSelection(mk64O2rUri);
+                        handleRomFileSelection(finalMk64O2rUri);
                     })
                     .setNegativeButton("No, just copy the file", (dialog, which) -> {
-                        handleRomFileSelection(mk64O2rUri);
+                        handleRomFileSelection(finalMk64O2rUri);
                     })
                     .show());
             } else {
