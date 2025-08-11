@@ -9,6 +9,8 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.Settings;
+import android.provider.DocumentsContract;
+import android.database.Cursor;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -50,15 +52,66 @@ static {
     private volatile boolean romFileReady = false;
 
     public static String getSaveDir() {
-    File dir = new File(Environment.getExternalStorageDirectory(), "Spaghetti-Kart");
-    if (!dir.exists()) dir.mkdirs();
-    return dir.getAbsolutePath();
+        // This method is called from native code, so we need to get the preferences
+        // Since this is static, we need to access preferences through the application context
+        try {
+            Context context = SDLActivity.getContext();
+            if (context != null) {
+                SharedPreferences prefs = context.getSharedPreferences("com.izzy.kart.prefs", Context.MODE_PRIVATE);
+                String chosenPath = prefs.getString("chosen_folder_path", null);
+                if (chosenPath != null) {
+                    File dir = new File(chosenPath);
+                    if (!dir.exists()) dir.mkdirs();
+                    return dir.getAbsolutePath();
+                }
+            }
+        } catch (Exception e) {
+            Log.w("MainActivity", "Could not get chosen folder, using default", e);
+        }
+        
+        // Fallback to default path
+        File dir = new File(Environment.getExternalStorageDirectory(), "Spaghetti-Kart");
+        if (!dir.exists()) dir.mkdirs();
+        return dir.getAbsolutePath();
+    }
+    
+    private String getUserChosenFolder() {
+        return preferences.getString("chosen_folder_path", 
+            new File(Environment.getExternalStorageDirectory(), "Spaghetti-Kart").getAbsolutePath());
+    }
+    
+    private void setUserChosenFolder(String folderPath) {
+        preferences.edit().putString("chosen_folder_path", folderPath).apply();
+    }
+    
+    private String tryGetPathFromUri(Uri treeUri) {
+        try {
+            // This is a simplified approach - document tree URIs are complex
+            // For external storage, we can sometimes extract a usable path
+            String treeId = android.provider.DocumentsContract.getTreeDocumentId(treeUri);
+            
+            // Check if it's external storage
+            if (treeId.startsWith("primary:")) {
+                String relativePath = treeId.substring("primary:".length());
+                File externalStorage = Environment.getExternalStorageDirectory();
+                return new File(externalStorage, relativePath).getAbsolutePath();
+            }
+            
+            // For other cases, we might not be able to get a direct path
+            // In that case, return null and we'll stick with the default behavior
+            Log.w("MainActivity", "Could not extract path from URI: " + treeUri);
+            return null;
+            
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error extracting path from URI", e);
+            return null;
+        }
     }
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         preferences = getSharedPreferences("com.izzy.kart.prefs", Context.MODE_PRIVATE);
-        targetRootFolder = new File(Environment.getExternalStorageDirectory(), "Spaghetti-Kart");
+        targetRootFolder = new File(getUserChosenFolder());
         romTargetFile = new File(targetRootFolder, "mk64.o2r");
 
         // Check if mk64.o2r exists before starting SDL
@@ -153,9 +206,10 @@ public void checkAndSetupFiles() {
     // This method is only called when file is missing (from onCreate)
     runOnUiThread(() -> new AlertDialog.Builder(this)
         .setTitle("Missing mk64.o2r")
-        .setMessage("Please select your mk64.o2r file to continue.")
+        .setMessage("To play Spaghetti Kart, you need an mk64.o2r file. You can:\n\n• Download Torch app to create mk64.o2r from your Mario Kart 64 ROM\n• Select a folder containing an existing mk64.o2r file\n\nWe suggest using a 'Spaghetti-Kart' folder for organization.")
         .setCancelable(false)
-        .setPositiveButton("Select File", (dialog, which) -> openFilePicker())
+        .setPositiveButton("Download Torch App", (dialog, which) -> openTorchDownload())
+        .setNegativeButton("Select Folder", (dialog, which) -> openFolderPicker())
         .show());
 }
 
@@ -192,7 +246,7 @@ public void checkAndSetupFiles() {
         super.onActivityResult(requestCode, resultCode, data);
 
         if (requestCode == FILE_PICKER_REQUEST_CODE && resultCode == RESULT_OK && data != null) {
-            handleRomFileSelection(data.getData());
+            handleFolderSelection(data.getData());
         } else if (requestCode == STORAGE_PERMISSION_REQUEST_CODE) {
             // Handle MANAGE_EXTERNAL_STORAGE result
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -206,11 +260,95 @@ public void checkAndSetupFiles() {
         }
     }
 
+    public void openFolderPicker() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        startActivityForResult(intent, FILE_PICKER_REQUEST_CODE);
+    }
+
     public void openFilePicker() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.setType("*/*");
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         startActivityForResult(intent, FILE_PICKER_REQUEST_CODE);
+    }
+
+    private void openTorchDownload() {
+        try {
+            Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/izzy2lost/Torch/releases"));
+            startActivity(browserIntent);
+            showToast("Opening Torch app download page. After installing Torch, use it to create mk64.o2r from your ROM, then return here.");
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error opening Torch download link", e);
+            showToast("Unable to open download link. Please visit: https://github.com/izzy2lost/Torch/releases");
+        }
+    }
+
+    private void handleFolderSelection(Uri selectedFolderUri) {
+        if (selectedFolderUri == null) {
+            showToast("No folder selected.");
+            return;
+        }
+
+        // Look for mk64.o2r in the selected folder
+        try {
+            android.content.ContentResolver resolver = getContentResolver();
+            android.database.Cursor cursor = resolver.query(
+                android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(selectedFolderUri, android.provider.DocumentsContract.getTreeDocumentId(selectedFolderUri)),
+                new String[]{android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID, android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME},
+                null, null, null
+            );
+
+            Uri mk64O2rUri = null;
+            if (cursor != null) {
+                while (cursor.moveToNext()) {
+                    String displayName = cursor.getString(cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_DISPLAY_NAME));
+                    if ("mk64.o2r".equals(displayName)) {
+                        String documentId = cursor.getString(cursor.getColumnIndex(android.provider.DocumentsContract.Document.COLUMN_DOCUMENT_ID));
+                        mk64O2rUri = android.provider.DocumentsContract.buildDocumentUriUsingTree(selectedFolderUri, documentId);
+                        break;
+                    }
+                }
+                cursor.close();
+            }
+
+            if (mk64O2rUri != null) {
+                // Found mk64.o2r in the selected folder
+                // Ask user if they want to use this folder as their main Spaghetti Kart folder
+                runOnUiThread(() -> new AlertDialog.Builder(this)
+                    .setTitle("mk64.o2r found!")
+                    .setMessage("Would you like to use this folder as your main Spaghetti Kart folder? This will store all game files and saves in this location.")
+                    .setPositiveButton("Yes, use this folder", (dialog, which) -> {
+                        // Try to get a usable path from the folder URI
+                        String folderPath = tryGetPathFromUri(selectedFolderUri);
+                        if (folderPath != null) {
+                            setUserChosenFolder(folderPath);
+                            // Update our target folder and file references
+                            targetRootFolder = new File(folderPath);
+                            romTargetFile = new File(targetRootFolder, "mk64.o2r");
+                            showToast("Folder updated! Using: " + folderPath);
+                        }
+                        handleRomFileSelection(mk64O2rUri);
+                    })
+                    .setNegativeButton("No, just copy the file", (dialog, which) -> {
+                        handleRomFileSelection(mk64O2rUri);
+                    })
+                    .show());
+            } else {
+                // mk64.o2r not found, offer multiple options
+                runOnUiThread(() -> new AlertDialog.Builder(this)
+                    .setTitle("mk64.o2r not found")
+                    .setMessage("mk64.o2r file was not found in the selected folder. You can:\n\n• Download Torch app to create mk64.o2r from your ROM\n• Select an existing mk64.o2r file\n• Choose a different folder")
+                    .setCancelable(false)
+                    .setPositiveButton("Download Torch App", (dialog, which) -> openTorchDownload())
+                    .setNeutralButton("Select File", (dialog, which) -> openFilePicker())
+                    .setNegativeButton("Different Folder", (dialog, which) -> openFolderPicker())
+                    .show());
+            }
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error searching for mk64.o2r in folder", e);
+            showToast("Error accessing selected folder. Please try selecting the mk64.o2r file directly.");
+            openFilePicker();
+        }
     }
 
     private void handleRomFileSelection(Uri selectedFileUri) {
