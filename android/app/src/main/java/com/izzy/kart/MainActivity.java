@@ -79,6 +79,7 @@ static {
     }
     
     private String getUserChosenFolder() {
+        // Return chosen folder if exists, otherwise return default but don't create it yet
         return preferences.getString("chosen_folder_path", 
             new File(Environment.getExternalStorageDirectory(), "Spaghetti-Kart").getAbsolutePath());
     }
@@ -113,6 +114,12 @@ static {
     
     private void copyEssentialFilesToFolder() {
         try {
+            // Ensure the chosen folder exists
+            if (!targetRootFolder.exists()) {
+                targetRootFolder.mkdirs();
+                Log.i("MainActivity", "Created folder: " + targetRootFolder.getAbsolutePath());
+            }
+            
             // Copy only essential files to the chosen folder if they don't exist
             File skO2rFile = new File(targetRootFolder, "spaghetti.o2r");
             File gameControllerDb = new File(targetRootFolder, "gamecontrollerdb.txt");
@@ -222,22 +229,7 @@ static {
 
 // Check & Setup Files 
 public void checkAndSetupFiles() {
-    if (!targetRootFolder.exists()) targetRootFolder.mkdirs();
-
-    // Always ensure mods folder exists
-    File targetModsDir = new File(targetRootFolder, "mods");
-    if (!targetModsDir.exists()) {
-        targetModsDir.mkdirs();
-    }
-    
-    // Only copy essential files
-    File skO2rFile = new File(targetRootFolder, "spaghetti.o2r");
-    File gameControllerDb = new File(targetRootFolder, "gamecontrollerdb.txt");
-    
-    if (!skO2rFile.exists()) copyAssetFile("spaghetti.o2r", skO2rFile);
-    if (!gameControllerDb.exists()) copyAssetFile("gamecontrollerdb.txt", gameControllerDb);
-    
-    // Step 1: Ask user to choose their folder first (no torch mention yet)
+    // Don't create any files yet - just ask user to choose their folder first
     runOnUiThread(() -> createPortraitDialog()
         .setTitle("Choose Your Folder")
         .setMessage("Please select the folder where you want to store your Spaghetti Kart files. We suggest creating a 'Spaghetti-Kart' folder.")
