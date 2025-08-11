@@ -48,86 +48,110 @@ static {
     private static final CountDownLatch setupLatch = new CountDownLatch(1);
     private static final int STORAGE_PERMISSION_REQUEST_CODE = 2296;
     private static final int FILE_PICKER_REQUEST_CODE = 0;
-    private File targetRootFolder;
-    private File romTargetFile; // Will hold the mk64.o2r destination
+    private File targetRootFolder; // User-selected folder for mods and mk64.o2r
+    private File romTargetFile; // Will hold the mk64.o2r destination in user folder
+    private Uri userFolderUri; // SAF URI for user-selected folder
     private volatile boolean romFileReady = false;
 
     public static String getSaveDir() {
-        // This method is called from native code, so we need to get the preferences
-        // Since this is static, we need to access preferences through the application context
+        // Return user-selected folder if available, otherwise app work dir
         try {
             Context context = SDLActivity.getContext();
             if (context != null) {
                 SharedPreferences prefs = context.getSharedPreferences("com.izzy.kart.prefs", Context.MODE_PRIVATE);
-                String chosenPath = prefs.getString("chosen_folder_path", null);
-                if (chosenPath != null) {
-                    File dir = new File(chosenPath);
-                    if (!dir.exists()) dir.mkdirs();
-                    Log.i("MainActivity", "getSaveDir returning chosen path: " + dir.getAbsolutePath());
-                    return dir.getAbsolutePath();
+                String userPath = prefs.getString("chosen_folder_path", null);
+                if (userPath != null && !userPath.isEmpty()) {
+                    File userDir = new File(userPath);
+                    if (userDir.exists() || userDir.mkdirs()) {
+                        Log.i("MainActivity", "getSaveDir returning user folder: " + userDir.getAbsolutePath());
+                        return userDir.getAbsolutePath();
+                    }
                 }
+                
+                // Fallback to app work dir
+                File workDir = new File(context.getExternalFilesDir(null), "Spaghetti-Kart");
+                if (!workDir.exists()) workDir.mkdirs();
+                Log.i("MainActivity", "getSaveDir returning app work dir: " + workDir.getAbsolutePath());
+                return workDir.getAbsolutePath();
             }
         } catch (Exception e) {
-            Log.w("MainActivity", "Could not get chosen folder, using default", e);
+            Log.w("MainActivity", "Could not get save dir, falling back to internal files dir", e);
         }
-        
-        // Fallback to default path
-        File dir = new File(Environment.getExternalStorageDirectory(), "Spaghetti-Kart");
-        if (!dir.exists()) dir.mkdirs();
-        Log.i("MainActivity", "getSaveDir returning default path: " + dir.getAbsolutePath());
-        return dir.getAbsolutePath();
+        // Final fallback to internal files dir
+        Context context = SDLActivity.getContext();
+        File internal = new File(context.getFilesDir(), "Spaghetti-Kart");
+        if (!internal.exists()) internal.mkdirs();
+        Log.i("MainActivity", "getSaveDir returning internal dir: " + internal.getAbsolutePath());
+        return internal.getAbsolutePath();
     }
     
     private String getUserChosenFolder() {
-        // Return chosen folder if exists, otherwise return default but don't create it yet
-        return preferences.getString("chosen_folder_path", 
-            new File(Environment.getExternalStorageDirectory(), "Spaghetti-Kart").getAbsolutePath());
+        // Return user-chosen folder path if available
+        return preferences.getString("chosen_folder_path", null);
     }
     
     private void setUserChosenFolder(String folderPath) {
         preferences.edit().putString("chosen_folder_path", folderPath).apply();
     }
     
+    private void setUserFolderUri(Uri uri) {
+        if (uri != null) {
+            preferences.edit().putString("user_folder_uri", uri.toString()).apply();
+        }
+    }
+    
+    private Uri getUserFolderUri() {
+        String uriString = preferences.getString("user_folder_uri", null);
+        return uriString != null ? Uri.parse(uriString) : null;
+    }
+
+    private File getAppWorkDir() {
+        File dir = new File(getExternalFilesDir(null), "Spaghetti-Kart");
+        if (!dir.exists()) dir.mkdirs();
+        return dir;
+    }
+    
     private String tryGetPathFromUri(Uri treeUri) {
         try {
-            // This is a simplified approach - document tree URIs are complex
-            // For external storage, we can sometimes extract a usable path
+            // Store the SAF URI string for reference, but don't extract raw path
             String treeId = android.provider.DocumentsContract.getTreeDocumentId(treeUri);
+            Log.i("MainActivity", "Selected folder URI: " + treeUri + ", treeId: " + treeId);
             
-            // Check if it's external storage
+            // Return a descriptive path for display purposes only
             if (treeId.startsWith("primary:")) {
                 String relativePath = treeId.substring("primary:".length());
-                File externalStorage = Environment.getExternalStorageDirectory();
-                return new File(externalStorage, relativePath).getAbsolutePath();
+                return "/storage/emulated/0/" + relativePath;
             }
             
-            // For other cases, we might not be able to get a direct path
-            // In that case, return null and we'll stick with the default behavior
-            Log.w("MainActivity", "Could not extract path from URI: " + treeUri);
-            return null;
+            return "Selected folder: " + treeId;
             
         } catch (Exception e) {
-            Log.e("MainActivity", "Error extracting path from URI", e);
-            return null;
+            Log.e("MainActivity", "Error processing URI", e);
+            return "Selected folder";
         }
     }
     
     private void copyEssentialFilesToFolder() {
         try {
-            // Ensure the chosen folder exists
-            if (!targetRootFolder.exists()) {
-                targetRootFolder.mkdirs();
-                Log.i("MainActivity", "Created folder: " + targetRootFolder.getAbsolutePath());
-            }
+            // Copy core app files to app work directory
+            File appWorkDir = getAppWorkDir();
             
-            // Copy only essential files to the chosen folder if they don't exist
-            File skO2rFile = new File(targetRootFolder, "spaghetti.o2r");
-            File gameControllerDb = new File(targetRootFolder, "gamecontrollerdb.txt");
-            File targetModsDir = new File(targetRootFolder, "mods");
+            File skO2rFile = new File(appWorkDir, "spaghetti.o2r");
+            File gameControllerDb = new File(appWorkDir, "gamecontrollerdb.txt");
             
-            if (!targetModsDir.exists()) targetModsDir.mkdirs();
             if (!skO2rFile.exists()) copyAssetFile("spaghetti.o2r", skO2rFile);
             if (!gameControllerDb.exists()) copyAssetFile("gamecontrollerdb.txt", gameControllerDb);
+            
+            Log.i("MainActivity", "Essential app files copied to: " + appWorkDir.getAbsolutePath());
+            
+            // Create mods folder in user directory if we have one
+            if (targetRootFolder != null && targetRootFolder.exists()) {
+                File userModsDir = new File(targetRootFolder, "mods");
+                if (!userModsDir.exists()) {
+                    userModsDir.mkdirs();
+                    Log.i("MainActivity", "Created mods folder in user directory: " + userModsDir.getAbsolutePath());
+                }
+            }
             
         } catch (Exception e) {
             Log.e("MainActivity", "Error copying essential files", e);
@@ -170,22 +194,31 @@ static {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         preferences = getSharedPreferences("com.izzy.kart.prefs", Context.MODE_PRIVATE);
-        targetRootFolder = new File(getUserChosenFolder());
-        romTargetFile = new File(targetRootFolder, "mk64.o2r");
+        
+        // Initialize user folder if previously selected
+        userFolderUri = getUserFolderUri();
+        String userFolderPath = getUserChosenFolder();
+        if (userFolderPath != null) {
+            targetRootFolder = new File(userFolderPath);
+            romTargetFile = new File(targetRootFolder, "mk64.o2r");
+        } else {
+            // Fallback to app work directory temporarily
+            targetRootFolder = getAppWorkDir();
+            romTargetFile = new File(targetRootFolder, "mk64.o2r");
+        }
 
         // Always start SDL and setup controller overlay
         super.onCreate(savedInstanceState);
         setupControllerOverlay();
         attachController();
         
+        // Copy essential files to app work dir first
+        copyEssentialFilesToFolder();
+        
         // Check if mk64.o2r exists - if not, start setup UI immediately
         // Engine.cpp will poll for the file to exist
         if (!romTargetFile.exists()) {
-            if (hasStoragePermission()) {
-                checkAndSetupFiles();
-            } else {
-                requestStoragePermission();
-            }
+            checkAndSetupFiles();
         }
     }
 
@@ -197,35 +230,15 @@ static {
         }
     }
 
-    // Permissions helpers
+    // Permissions helpers - no longer need storage permissions for app-specific dirs
     private boolean hasStoragePermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            return Environment.isExternalStorageManager();
-        } else {
-            return ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED
-                    && ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
-        }
+        // App-specific external storage doesn't require permissions
+        return true;
     }
 
     private void requestStoragePermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (!Environment.isExternalStorageManager()) {
-                Intent intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
-                intent.setData(Uri.parse("package:" + getPackageName()));
-                startActivityForResult(intent, STORAGE_PERMISSION_REQUEST_CODE);
-            } else {
-                checkAndSetupFiles();
-            }
-        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            ActivityCompat.requestPermissions(this,
-                    new String[]{
-                            Manifest.permission.READ_EXTERNAL_STORAGE,
-                            Manifest.permission.WRITE_EXTERNAL_STORAGE
-                    },
-                    STORAGE_PERMISSION_REQUEST_CODE);
-        } else {
-            checkAndSetupFiles();
-        }
+        // No longer need to request storage permissions - directly setup files
+        checkAndSetupFiles();
     }
 
 // Check & Setup Files 
@@ -273,17 +286,8 @@ public void checkAndSetupFiles() {
 
         if (requestCode == FILE_PICKER_REQUEST_CODE && resultCode == RESULT_OK && data != null) {
             handleFolderSelection(data.getData());
-        } else if (requestCode == STORAGE_PERMISSION_REQUEST_CODE) {
-            // Handle MANAGE_EXTERNAL_STORAGE result
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                if (Environment.isExternalStorageManager()) {
-                    checkAndSetupFiles();
-                } else {
-                    Toast.makeText(this, "Storage permission is required to access files.", Toast.LENGTH_LONG).show();
-                    // finish();
-                }
-            }
         }
+        // No longer handle STORAGE_PERMISSION_REQUEST_CODE - not needed
     }
 
     public void openFolderPicker() {
@@ -318,17 +322,18 @@ public void checkAndSetupFiles() {
             return;
         }
 
-        // Try to get a usable path from the folder URI and set it as chosen folder
+        // Store folder URI and path for user files (mods, mk64.o2r)
+        setUserFolderUri(selectedFolderUri);
         String folderPath = tryGetPathFromUri(selectedFolderUri);
         if (folderPath != null) {
             setUserChosenFolder(folderPath);
             targetRootFolder = new File(folderPath);
             romTargetFile = new File(targetRootFolder, "mk64.o2r");
             
-            // Copy essential files to the chosen folder
+            // Create the user folder and copy essential files
             copyEssentialFilesToFolder();
             
-            showToast("Folder set to: " + folderPath);
+            showToast("Folder selected: " + folderPath);
         }
 
         // Now check if mk64.o2r exists in the selected folder
@@ -396,12 +401,12 @@ public void checkAndSetupFiles() {
             out.flush();
             out.getFD().sync();
             
-            Log.i("MainActivity", "mk64.o2r file copied successfully, size: " + romTargetFile.length() + " bytes");
+            Log.i("MainActivity", "mk64.o2r file copied to user folder successfully, size: " + romTargetFile.length() + " bytes");
             
             // Show restart dialog
             runOnUiThread(() -> createPortraitDialog()
                 .setTitle("mk64.o2r file ready!")
-                .setMessage("The mk64.o2r file has been copied successfully. The app will now restart to load the game.")
+                .setMessage("The mk64.o2r file has been copied to your selected folder. The app will now restart to load the game.")
                 .setCancelable(false)
                 .setPositiveButton("Restart App", (dialog, which) -> restartApp())
                 .show());
