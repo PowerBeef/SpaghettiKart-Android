@@ -21,6 +21,7 @@ import java.util.concurrent.CountDownLatch;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.content.pm.ActivityInfo;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import android.os.Build;
@@ -106,6 +107,64 @@ static {
             Log.e("MainActivity", "Error extracting path from URI", e);
             return null;
         }
+    }
+    
+    private void copyEssentialFilesToFolder() {
+        try {
+            // Copy essential files to the chosen folder if they don't exist
+            File assetsFolder = new File(targetRootFolder, "assets");
+            File skO2rFile = new File(targetRootFolder, "spaghetti.o2r");
+            File configYml = new File(targetRootFolder, "config.yml");
+            File yamlsFolder = new File(targetRootFolder, "yamls");
+            File gameControllerDb = new File(targetRootFolder, "gamecontrollerdb.txt");
+            File targetModsDir = new File(targetRootFolder, "mods");
+            
+            if (!targetModsDir.exists()) targetModsDir.mkdirs();
+            
+            if (!assetsFolder.exists() || assetsFolder.listFiles() == null || assetsFolder.listFiles().length == 0) {
+                copyAssetFolder("assets", assetsFolder.getAbsolutePath());
+            }
+            if (!yamlsFolder.exists() || yamlsFolder.listFiles() == null || yamlsFolder.listFiles().length == 0) {
+                copyAssetFolder("yamls", yamlsFolder.getAbsolutePath());
+            }
+            if (!configYml.exists()) copyAssetFile("config.yml", configYml);
+            if (!skO2rFile.exists()) copyAssetFile("spaghetti.o2r", skO2rFile);
+            if (!gameControllerDb.exists()) copyAssetFile("gamecontrollerdb.txt", gameControllerDb);
+            
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error copying essential files", e);
+            showToast("Warning: Some game files may be missing");
+        }
+    }
+    
+    private void restartApp() {
+        try {
+            Intent intent = getPackageManager().getLaunchIntentForPackage(getPackageName());
+            if (intent != null) {
+                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+                finish();
+                System.exit(0);
+            }
+        } catch (Exception e) {
+            Log.e("MainActivity", "Error restarting app", e);
+            showToast("Please restart the app manually");
+        }
+    }
+    
+    private AlertDialog.Builder createPortraitDialog() {
+        // Temporarily switch to portrait for dialogs
+        int currentOrientation = getRequestedOrientation();
+        setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+        
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        
+        // Set a listener to restore landscape when dialog is dismissed
+        builder.setOnDismissListener(dialog -> {
+            setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        });
+        
+        return builder;
     }
     
     @Override
@@ -204,7 +263,7 @@ public void checkAndSetupFiles() {
     if (missingGameControllerDb) copyAssetFile("gamecontrollerdb.txt", gameControllerDb);
     
     // This method is only called when file is missing (from onCreate)
-    runOnUiThread(() -> new AlertDialog.Builder(this)
+    runOnUiThread(() -> createPortraitDialog()
         .setTitle("Missing mk64.o2r")
         .setMessage("To play Spaghetti Kart, you need an mk64.o2r file. You can:\n\n• Download Torch app to create mk64.o2r from your Mario Kart 64 ROM\n• Select a folder containing an existing mk64.o2r file\n\nWe suggest using a 'Spaghetti-Kart' folder for organization.")
         .setCancelable(false)
@@ -317,7 +376,7 @@ public void checkAndSetupFiles() {
                 final Uri finalMk64O2rUri = mk64O2rUri;
                 
                 // Ask user if they want to use this folder as their main Spaghetti Kart folder
-                runOnUiThread(() -> new AlertDialog.Builder(this)
+                runOnUiThread(() -> createPortraitDialog()
                     .setTitle("mk64.o2r found!")
                     .setMessage("Would you like to use this folder as your main Spaghetti Kart folder? This will store all game files and saves in this location.")
                     .setPositiveButton("Yes, use this folder", (dialog, which) -> {
@@ -328,9 +387,17 @@ public void checkAndSetupFiles() {
                             // Update our target folder and file references
                             targetRootFolder = new File(folderPath);
                             romTargetFile = new File(targetRootFolder, "mk64.o2r");
+                            
+                            // Copy missing essential files to the chosen folder
+                            copyEssentialFilesToFolder();
+                            
                             showToast("Folder updated! Using: " + folderPath);
+                            // Restart the app to use the new folder
+                            restartApp();
+                        } else {
+                            // Fallback: copy the file to current location
+                            handleRomFileSelection(finalMk64O2rUri);
                         }
-                        handleRomFileSelection(finalMk64O2rUri);
                     })
                     .setNegativeButton("No, just copy the file", (dialog, which) -> {
                         handleRomFileSelection(finalMk64O2rUri);
@@ -338,7 +405,7 @@ public void checkAndSetupFiles() {
                     .show());
             } else {
                 // mk64.o2r not found, offer multiple options
-                runOnUiThread(() -> new AlertDialog.Builder(this)
+                runOnUiThread(() -> createPortraitDialog()
                     .setTitle("mk64.o2r not found")
                     .setMessage("mk64.o2r file was not found in the selected folder. You can:\n\n• Download Torch app to create mk64.o2r from your ROM\n• Select an existing mk64.o2r file\n• Choose a different folder")
                     .setCancelable(false)
@@ -420,8 +487,18 @@ public void checkAndSetupFiles() {
                 attachController();
                 setupLatch.countDown();
                 romFileReady = true;
-                showToast("mk64.o2r loaded successfully!");
                 Log.i("MainActivity", "Native call successful on attempt " + (attempt + 1));
+                
+                // Show restart dialog for better user experience
+                runOnUiThread(() -> createPortraitDialog()
+                    .setTitle("mk64.o2r loaded successfully!")
+                    .setMessage("The game file has been loaded. For the best experience, we recommend restarting the app now.")
+                    .setCancelable(false)
+                    .setPositiveButton("Restart Now", (dialog, which) -> restartApp())
+                    .setNegativeButton("Continue", (dialog, which) -> {
+                        showToast("Game ready! You may experience issues without restarting.");
+                    })
+                    .show());
             } catch (UnsatisfiedLinkError e) {
                 Log.w("MainActivity", "Native library not ready on attempt " + (attempt + 1) + ", retrying...", e);
                 // Retry with exponential backoff
