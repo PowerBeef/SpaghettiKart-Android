@@ -176,6 +176,7 @@ static {
         // Always start SDL and setup controller overlay
         super.onCreate(savedInstanceState);
         setupControllerOverlay();
+        attachController();
         
         // Check if mk64.o2r exists - if not, start setup UI immediately
         // Engine.cpp will poll for the file to exist
@@ -300,7 +301,10 @@ public void checkAndSetupFiles() {
     private void openTorchDownload() {
         try {
             Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/izzy2lost/Torch/releases"));
-            startActivity(browserIntent);
+            // Create a chooser to let user pick browser and avoid download managers
+            Intent chooser = Intent.createChooser(browserIntent, "Open Torch download page with:");
+            chooser.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(chooser);
             showToast("Opening Torch app download page. After installing Torch, use it to create mk64.o2r from your ROM, then return here.");
         } catch (Exception e) {
             Log.e("MainActivity", "Error opening Torch download link", e);
