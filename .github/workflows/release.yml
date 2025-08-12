@@ -1,0 +1,54 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    
+    - name: Trigger Android Build
+      uses: ./.github/workflows/android-compile.yml
+      with:
+        build_type: release
+    
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Spaghetti Kart ${{ github.ref }}
+        draft: false
+        prerelease: false
+        body: |
+          ## Spaghetti Kart Release ${{ github.ref }}
+          
+          ### What's New
+          - Improved folder selection with SAF (Storage Access Framework)
+          - Automatic mods syncing from user folder
+          - Better UI with rounded dialogs
+          - Torch app integration for easy mk64.o2r creation
+          
+          ### Installation
+          1. Download the APK below
+          2. Install on your Android device
+          3. Select a folder for your game files
+          4. Add your mk64.o2r file (use Torch app to create from ROM)
+          5. Enjoy!
+    
+    - name: Upload Release APK
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./spaghettikart-release.apk
+        asset_name: SpaghettiKart-${{ github.ref }}-release.apk
+        asset_content_type: application/vnd.android.package-archive

@@ -2,6 +2,27 @@ name: Android Build
 
 on:
   workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+        - debug
+        - release
+  push:
+    branches: [ main ]
+    paths: 
+      - 'android/**'
+      - 'src/**'
+      - 'CMakeLists.txt'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'android/**'
+      - 'src/**'
+      - 'CMakeLists.txt'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -59,14 +80,54 @@ jobs:
         path: android/app/src/main/assets 
     - name: Configure Gradle permissions
       run: chmod +x android/gradlew
-    - name: Build Spaghetti Kart
+    
+    # Set up signing for release builds
+    - name: Setup signing keystore (Release only)
+      if: github.event.inputs.build_type == 'release' || github.ref == 'refs/heads/main'
+      run: |
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+      env:
+        KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+    
+    # Build Debug APK
+    - name: Build Debug APK
+      if: github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == ''
       run: |
         cd android/
         ./gradlew assembleDebug -P elfBuildType=RelWithDebInfo
-        mv app/build/outputs/apk/debug/app-debug.apk ../spaghettikart.apk
-    - name: Upload APK artifact
+        mv app/build/outputs/apk/debug/app-debug.apk ../spaghettikart-debug.apk
+    
+    # Build Release APK (signed)
+    - name: Build Release APK
+      if: github.event.inputs.build_type == 'release' || github.ref == 'refs/heads/main'
+      run: |
+        cd android/
+        ./gradlew assembleRelease -P elfBuildType=Release
+        mv app/build/outputs/apk/release/app-release.apk ../spaghettikart-release.apk
+      env:
+        KEYSTORE_FILE: release.keystore
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+    
+    # Upload Debug APK
+    - name: Upload Debug APK
+      if: github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == ''
       uses: actions/upload-artifact@v4
       with:
-        name: spaghetti-kart-apk
-        path: spaghettikart.apk
+        name: spaghetti-kart-debug-apk
+        path: spaghettikart-debug.apk
+    
+    # Upload Release APK
+    - name: Upload Release APK
+      if: github.event.inputs.build_type == 'release' || github.ref == 'refs/heads/main'
+      uses: actions/upload-artifact@v4
+      with:
+        name: spaghetti-kart-release-apk
+        path: spaghettikart-release.apk
+    
+    # Clean up keystore
+    - name: Clean up keystore
+      if: always()
+      run: rm -f android/app/release.keystore
         
