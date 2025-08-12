@@ -57,37 +57,12 @@ public class MainActivity extends SDLActivity {
     public native void setCameraState(int axis, float value);
     public native void setAxis(int axis, short value);
 
-    // ===== Save dir for the engine =====
+    // ===== Save dir for the engine (internal only; no extra subfolder) =====
     public static String getSaveDir() {
         Context ctx = SDLActivity.getContext();
-        
-        // Try to get user's chosen folder first
-        SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        String userFolderUriString = prefs.getString(KEY_USER_FOLDER_URI, null);
-        
-        if (userFolderUriString != null) {
-            try {
-                Uri userFolderUri = Uri.parse(userFolderUriString);
-                String treeId = DocumentsContract.getTreeDocumentId(userFolderUri);
-                
-                // Check if it's external storage
-                if (treeId.startsWith("primary:")) {
-                    String relativePath = treeId.substring("primary:".length());
-                    File externalStorage = Environment.getExternalStorageDirectory();
-                    File userFolder = new File(externalStorage, relativePath);
-                    if (!userFolder.exists()) userFolder.mkdirs();
-                    Log.i(TAG, "getSaveDir -> user folder: " + userFolder.getAbsolutePath());
-                    return userFolder.getAbsolutePath();
-                }
-            } catch (Exception e) {
-                Log.w(TAG, "Could not use user folder, falling back to internal", e);
-            }
-        }
-        
-        // Fallback to internal storage
         File internal = ctx.getFilesDir(); // /data/data/<pkg>/files
         if (!internal.exists()) internal.mkdirs();
-        Log.i(TAG, "getSaveDir -> internal fallback: " + internal.getAbsolutePath());
+        Log.i(TAG, "getSaveDir -> " + internal.getAbsolutePath());
         return internal.getAbsolutePath();
     }
 
@@ -140,26 +115,37 @@ public class MainActivity extends SDLActivity {
         Log.i(TAG, "Internal root: " + internal);
         Log.i(TAG, "External root: " + external);
 
-        // Check for mk64.o2r in both internal storage and user's chosen folder
+        // Check for mk64.o2r in internal storage first
         File internalMk64 = new File(internal, "mk64.o2r");
-        File userMk64 = null;
         
-        if (userFolderUri != null) {
-            String userFolderPath = getUserFolderPath();
-            if (userFolderPath != null) {
-                userMk64 = new File(userFolderPath, "mk64.o2r");
-                Log.i(TAG, "Checking user folder for mk64.o2r: " + userMk64.getAbsolutePath() + " exists: " + userMk64.exists());
+        // If not in internal, check if it exists in user's chosen folder and copy it
+        if (!internalMk64.exists() && userFolderUri != null) {
+            DocumentFile userRoot = DocumentFile.fromTreeUri(this, userFolderUri);
+            if (userRoot != null) {
+                DocumentFile userMk64 = userRoot.findFile("mk64.o2r");
+                if (userMk64 != null && userMk64.exists()) {
+                    Log.i(TAG, "Found mk64.o2r in user folder, copying to internal storage");
+                    try (InputStream in = getContentResolver().openInputStream(userMk64.getUri());
+                         FileOutputStream out = new FileOutputStream(internalMk64)) {
+                        byte[] buf = new byte[8192];
+                        int r;
+                        while ((r = in.read(buf)) != -1) { out.write(buf, 0, r); }
+                        out.flush();
+                        out.getFD().sync();
+                        Log.i(TAG, "mk64.o2r copied from user folder to internal storage");
+                    } catch (IOException e) {
+                        Log.e(TAG, "Failed to copy mk64.o2r from user folder", e);
+                    }
+                }
             }
         }
         
-        boolean mk64Exists = internalMk64.exists() || (userMk64 != null && userMk64.exists());
-        Log.i(TAG, "mk64.o2r status - internal: " + internalMk64.exists() + ", user folder: " + (userMk64 != null ? userMk64.exists() : "no user folder"));
-        
-        if (!mk64Exists) {
+        // Now check if mk64.o2r exists in internal storage
+        if (!internalMk64.exists()) {
             Log.i(TAG, "mk64.o2r not found. Prompting for folder.");
             promptForUserFolder();
         } else {
-            Log.i(TAG, "mk64.o2r found, game should start normally.");
+            Log.i(TAG, "mk64.o2r found in internal storage, game should start normally.");
         }
     }
 
@@ -475,49 +461,27 @@ public class MainActivity extends SDLActivity {
         return copied > 0;
     }
 
-    // When user picks mk64.o2r via SAF, copy into USER'S CHOSEN FOLDER (engine reads from there)
+    // When user picks mk64.o2r via SAF, copy into INTERNAL (engine reads from here)
     private void handleRomFileSelection(Uri selectedFileUri) {
         if (selectedFileUri == null) { showToast("No mk64.o2r selected."); return; }
 
-        if (userFolderUri == null) {
-            showToast("No folder selected. Please select a folder first.");
-            return;
-        }
+        File dest = new File(getFilesDir(), "mk64.o2r");
+        showToast("Copying mk64.o2r...");
+        try (InputStream in = getContentResolver().openInputStream(selectedFileUri);
+             FileOutputStream out = new FileOutputStream(dest)) {
+            byte[] buf = new byte[8192];
+            int r;
+            long total = 0;
+            while ((r = in.read(buf)) != -1) { out.write(buf, 0, r); total += r; }
+            out.flush();
+            out.getFD().sync();
+            Log.i(TAG, "mk64.o2r copied to internal (" + total + " bytes): " + dest.getAbsolutePath());
 
-        DocumentFile userRoot = DocumentFile.fromTreeUri(this, userFolderUri);
-        if (userRoot == null) {
-            showToast("Cannot access selected folder.");
-            return;
-        }
-
-        showToast("Copying mk64.o2r to your folder...");
-        try {
-            // Create or get mk64.o2r file in user's folder
-            DocumentFile mk64File = userRoot.findFile("mk64.o2r");
-            if (mk64File == null) {
-                mk64File = userRoot.createFile("application/octet-stream", "mk64.o2r");
-            }
-            
-            if (mk64File == null) {
-                showToast("Could not create mk64.o2r in selected folder.");
-                return;
-            }
-
-            try (InputStream in = getContentResolver().openInputStream(selectedFileUri);
-                 OutputStream out = getContentResolver().openOutputStream(mk64File.getUri())) {
-                byte[] buf = new byte[8192];
-                int r;
-                long total = 0;
-                while ((r = in.read(buf)) != -1) { out.write(buf, 0, r); total += r; }
-                out.flush();
-                Log.i(TAG, "mk64.o2r copied to user folder (" + total + " bytes)");
-
-                runOnUiThread(() -> createPortraitDialog()
-                    .setTitle("mk64.o2r ready")
-                    .setMessage("mk64.o2r copied to your folder. Restart to load the game.")
-                    .setPositiveButton("Restart", (d, w) -> restartApp())
-                    .show());
-            }
+            runOnUiThread(() -> createPortraitDialog()
+                .setTitle("mk64.o2r ready")
+                .setMessage("mk64.o2r copied. Restart to load the game.")
+                .setPositiveButton("Restart", (d, w) -> restartApp())
+                .show());
         } catch (IOException e) {
             Log.e(TAG, "handleRomFileSelection", e);
             showToast("Failed to copy mk64.o2r: " + e.getMessage());
