@@ -411,6 +411,33 @@ public class MainActivity extends SDLActivity {
         return "application/octet-stream";
     }
 
+    // ===== Handle direct mk64.o2r selection (SAF file -> INTERNAL) =====
+    private void handleRomFileSelection(Uri selectedFileUri) {
+        if (selectedFileUri == null) { showToast("No mk64.o2r selected."); return; }
+
+        File dest = new File(getFilesDir(), "mk64.o2r");
+        showToast("Copying mk64.o2r...");
+        try (InputStream in = getContentResolver().openInputStream(selectedFileUri);
+             FileOutputStream out = new FileOutputStream(dest)) {
+            byte[] buf = new byte[8192];
+            int r;
+            long total = 0;
+            while ((r = in.read(buf)) != -1) { out.write(buf, 0, r); total += r; }
+            out.flush();
+            out.getFD().sync();
+            Log.i(TAG, "mk64.o2r copied to internal (" + total + " bytes): " + dest.getAbsolutePath());
+
+            runOnUiThread(() -> createPortraitDialog()
+                .setTitle("mk64.o2r ready")
+                .setMessage("mk64.o2r copied. Restart to load the game.")
+                .setPositiveButton("Restart", (d, w) -> restartApp())
+                .show());
+        } catch (IOException e) {
+            Log.e(TAG, "handleRomFileSelection", e);
+            showToast("Failed to copy mk64.o2r: " + e.getMessage());
+        }
+    }
+
     // ================= Controller overlay and touch handling (unchanged) =================
     private Button buttonA, buttonB, buttonX, buttonY;
     private Button buttonDpadUp, buttonDpadDown, buttonDpadLeft, buttonDpadRight;
