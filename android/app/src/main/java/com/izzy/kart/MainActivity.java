@@ -106,8 +106,9 @@ static {
     }
 
     private File getAppWorkDir() {
-        File dir = new File(getExternalFilesDir(null), "Spaghetti-Kart");
-        if (!dir.exists()) dir.mkdirs();
+        // Return the root external files directory, not a subfolder
+        File dir = getExternalFilesDir(null);
+        if (dir != null && !dir.exists()) dir.mkdirs();
         return dir;
     }
     
@@ -133,22 +134,28 @@ static {
     
     private void copyEssentialFilesToFolder() {
         try {
-            // Copy essential files to user directory if available, otherwise app work directory
-            File targetDir = (targetRootFolder != null && targetRootFolder.exists()) ? targetRootFolder : getAppWorkDir();
+            // Always ensure essential files are in app work directory first (for fallback)
+            File appWorkDir = getAppWorkDir();
+            File appSkO2rFile = new File(appWorkDir, "spaghetti.o2r");
+            File appGameControllerDb = new File(appWorkDir, "gamecontrollerdb.txt");
             
-            File skO2rFile = new File(targetDir, "spaghetti.o2r");
-            File gameControllerDb = new File(targetDir, "gamecontrollerdb.txt");
-            File targetModsDir = new File(targetDir, "mods");
+            if (!appSkO2rFile.exists()) copyAssetFile("spaghetti.o2r", appSkO2rFile);
+            if (!appGameControllerDb.exists()) copyAssetFile("gamecontrollerdb.txt", appGameControllerDb);
             
-            // Ensure target directory exists
-            if (!targetDir.exists()) targetDir.mkdirs();
+            Log.i("MainActivity", "Essential files ensured in app work dir: " + appWorkDir.getAbsolutePath());
             
-            // Copy essential files
-            if (!skO2rFile.exists()) copyAssetFile("spaghetti.o2r", skO2rFile);
-            if (!gameControllerDb.exists()) copyAssetFile("gamecontrollerdb.txt", gameControllerDb);
-            if (!targetModsDir.exists()) targetModsDir.mkdirs();
-            
-            Log.i("MainActivity", "Essential files copied to: " + targetDir.getAbsolutePath());
+            // If user has selected a folder, also copy files there
+            if (targetRootFolder != null && targetRootFolder.exists() && !targetRootFolder.equals(appWorkDir)) {
+                File userSkO2rFile = new File(targetRootFolder, "spaghetti.o2r");
+                File userGameControllerDb = new File(targetRootFolder, "gamecontrollerdb.txt");
+                File userModsDir = new File(targetRootFolder, "mods");
+                
+                if (!userSkO2rFile.exists()) copyAssetFile("spaghetti.o2r", userSkO2rFile);
+                if (!userGameControllerDb.exists()) copyAssetFile("gamecontrollerdb.txt", userGameControllerDb);
+                if (!userModsDir.exists()) userModsDir.mkdirs();
+                
+                Log.i("MainActivity", "Essential files also copied to user folder: " + targetRootFolder.getAbsolutePath());
+            }
             
         } catch (Exception e) {
             Log.e("MainActivity", "Error copying essential files", e);
@@ -262,14 +269,23 @@ public void checkAndSetupFiles() {
     }
 
     private void copyAssetFile(String assetFileName, File destFile) {
-        try (InputStream in = getAssets().open(assetFileName);
-             OutputStream out = new FileOutputStream(destFile)) {
-            byte[] buffer = new byte[4096];
-            int read;
-            while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
-            showToast(assetFileName + " copied");
+        try {
+            // Ensure parent directory exists
+            File parentDir = destFile.getParentFile();
+            if (parentDir != null && !parentDir.exists()) {
+                parentDir.mkdirs();
+            }
+            
+            try (InputStream in = getAssets().open(assetFileName);
+                 OutputStream out = new FileOutputStream(destFile)) {
+                byte[] buffer = new byte[4096];
+                int read;
+                while ((read = in.read(buffer)) != -1) out.write(buffer, 0, read);
+                Log.i("MainActivity", "Successfully copied " + assetFileName + " to " + destFile.getAbsolutePath());
+            }
         } catch (IOException e) {
-            showToast("Error copying " + assetFileName);
+            Log.e("MainActivity", "Error copying " + assetFileName + " to " + destFile.getAbsolutePath(), e);
+            showToast("Error copying " + assetFileName + ": " + e.getMessage());
         }
     }
 
