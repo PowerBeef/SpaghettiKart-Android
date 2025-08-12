@@ -33,23 +33,15 @@ import android.widget.ImageView;
 import android.view.KeyEvent;
 
 public class MainActivity extends SDLActivity {
-    static {
-        System.loadLibrary("Spaghettify");
-    }
+    static { System.loadLibrary("Spaghettify"); }
 
     // ===== Constants / Prefs =====
     private static final String PREFS = "com.izzy.kart.prefs";
     private static final String KEY_USER_FOLDER_URI = "user_folder_uri";
+    private static final String TAG = "MainActivity";
 
     private static final int REQ_PICK_FOLDER = 1001;
     private static final int REQ_PICK_MK64    = 1002;
-
-    // Filenames of interest
-    private static final String F_CONTROLLER_DB_1 = "controllerdb.txt";
-    private static final String F_CONTROLLER_DB_2 = "gamecontrollerdb.txt"; // legacy name
-    private static final String F_SPAGHETTI       = "spaghetti.o2r";
-    private static final String D_MODS            = "mods";
-    private static final String F_MK64            = "mk64.o2r";
 
     // ===== State =====
     SharedPreferences preferences;
@@ -63,14 +55,12 @@ public class MainActivity extends SDLActivity {
     public native void setCameraState(int axis, float value);
     public native void setAxis(int axis, short value);
 
-    // ===== Save dir for the engine (internal runtime cache) =====
-    // Note: Native code expects real filesystem paths; SAF exposes URIs only.
-    // We keep INTERNAL as runtime cache and mirror to/from SAF automatically.
+    // ===== Save dir for the engine (internal only; no extra subfolder) =====
     public static String getSaveDir() {
         Context ctx = SDLActivity.getContext();
-        File internal = ctx.getFilesDir();
+        File internal = ctx.getFilesDir(); // /data/data/<pkg>/files
         if (!internal.exists()) internal.mkdirs();
-        Log.i("MainActivity", "getSaveDir -> " + internal.getAbsolutePath());
+        Log.i(TAG, "getSaveDir -> " + internal.getAbsolutePath());
         return internal.getAbsolutePath();
     }
 
@@ -83,41 +73,29 @@ public class MainActivity extends SDLActivity {
         preferences.edit().putString(KEY_USER_FOLDER_URI, uri != null ? uri.toString() : null).apply();
     }
 
-    private DocumentFile getUserRoot() {
-        if (userFolderUri == null) return null;
-        return DocumentFile.fromTreeUri(this, userFolderUri);
-    }
-
     // ===== Lifecycle =====
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         preferences = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         userFolderUri = getUserFolderUri();
 
-        // Start SDL and overlay
         super.onCreate(savedInstanceState);
         setupControllerOverlay();
         attachController();
 
-        if (userFolderUri == null) {
-            promptForUserFolder();
-        } else {
-            // On launch, make SAF the source of truth and sync to internal runtime cache
-            syncBothWaysPreferSaf();
-            // Optional: if mk64.o2r still missing internally after sync, prompt user
-            File internalMk64 = new File(getFilesDir(), F_MK64);
-            if (!internalMk64.exists()) {
-                promptForMk64();
-            }
-        }
-    }
+        // Seed internal directory with assets if they exist (optional)
+        seedInternalFromAssetsIfPresent();
 
-    @Override
-    protected void onPause() {
-        super.onPause();
-        // On suspend, push internal changes back to SAF so user's folder stays current
-        if (userFolderUri != null) {
-            syncInternalToSaf();
+        File internal = getFilesDir();
+        File external = getExternalFilesDir(null);
+        Log.i(TAG, "Internal root: " + internal);
+        Log.i(TAG, "External root: " + external);
+
+        // If mk64.o2r isn't in internal storage yet, prompt the user to pick a folder
+        File internalMk64 = new File(internal, "mk64.o2r");
+        if (!internalMk64.exists()) {
+            Log.i(TAG, "mk64.o2r not in internal. Prompting for folder.");
+            promptForUserFolder();
         }
     }
 
@@ -125,13 +103,92 @@ public class MainActivity extends SDLActivity {
         try { setupLatch.await(); } catch (InterruptedException ignored) {}
     }
 
+    // ===== Asset seeding (optional, safe if assets not present) =====
+    private boolean assetExists(String name) {
+        try { getAssets().open(name).close(); return true; }
+        catch (IOException e) { return false; }
+    }
+
+    private boolean assetDirExists(String dir) {
+        try { String[] list = getAssets().list(dir); return list != null && list.length > 0; }
+        catch (IOException e) { return false; }
+    }
+
+    private void seedInternalFromAssetsIfPresent() {
+        File internal = getFilesDir();
+
+        // Prefer the real name: gamecontrollerdb.txt (but accept controllerdb.txt asset if that's what you ship)
+        File gcdb = new File(internal, "gamecontrollerdb.txt");
+        File cdb  = new File(internal, "controllerdb.txt");
+
+        if (!gcdb.exists() && !cdb.exists()) {
+            if (assetExists("gamecontrollerdb.txt")) {
+                copyAssetFile("gamecontrollerdb.txt", gcdb);
+            } else if (assetExists("controllerdb.txt")) {
+                copyAssetFile("controllerdb.txt", cdb);
+            } else {
+                Log.i(TAG, "No controller DB asset shipped.");
+            }
+        }
+
+        File spaghetti = new File(internal, "spaghetti.o2r");
+        if (!spaghetti.exists() && assetExists("spaghetti.o2r")) {
+            copyAssetFile("spaghetti.o2r", spaghetti);
+        }
+
+        File modsDir = new File(internal, "mods");
+        if (!modsDir.exists() && assetDirExists("mods")) {
+            copyAssetFolderRecursive("mods", modsDir);
+        }
+    }
+
+    private void copyAssetFile(String assetName, File destFile) {
+        try {
+            File parent = destFile.getParentFile();
+            if (parent != null && !parent.exists()) parent.mkdirs();
+            try (InputStream in = getAssets().open(assetName);
+                 FileOutputStream out = new FileOutputStream(destFile)) {
+                byte[] buffer = new byte[8192];
+                int read;
+                long total = 0;
+                while ((read = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, read);
+                    total += read;
+                }
+                out.flush();
+                out.getFD().sync();
+                Log.i(TAG, "Seeded asset " + assetName + " (" + total + " bytes) -> " + destFile.getAbsolutePath());
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "copyAssetFile failed for " + assetName, e);
+        }
+    }
+
+    private void copyAssetFolderRecursive(String assetDir, File destDir) {
+        try {
+            if (!destDir.exists()) destDir.mkdirs();
+            String[] kids = getAssets().list(assetDir);
+            if (kids == null) return;
+            for (String name : kids) {
+                String assetPath = assetDir + "/" + name;
+                String[] sub = getAssets().list(assetPath);
+                if (sub != null && sub.length > 0) {
+                    copyAssetFolderRecursive(assetPath, new File(destDir, name));
+                } else {
+                    copyAssetFile(assetPath, new File(destDir, name));
+                }
+            }
+            Log.i(TAG, "Seeded asset dir " + assetDir + " -> " + destDir.getAbsolutePath());
+        } catch (IOException e) {
+            Log.e(TAG, "copyAssetFolderRecursive failed for " + assetDir, e);
+        }
+    }
+
     // ===== UI helpers =====
     private AlertDialog.Builder createPortraitDialog() {
         setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
         AlertDialog.Builder b = new AlertDialog.Builder(this);
-        b.setOnDismissListener(d ->
-            setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
-        );
+        b.setOnDismissListener(d -> setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE));
         return b;
     }
 
@@ -149,31 +206,21 @@ public class MainActivity extends SDLActivity {
                 System.exit(0);
             }
         } catch (Exception e) {
-            Log.e("MainActivity", "restartApp", e);
+            Log.e(TAG, "restartApp", e);
             showToast("Please restart the app manually");
         }
     }
 
+    // ===== Folder / File pickers =====
     private void promptForUserFolder() {
         runOnUiThread(() -> createPortraitDialog()
             .setTitle("Choose Your Folder")
-            .setMessage("Pick the folder to store your game files. We'll read and write using Android's Storage Access Framework (SAF).")
+            .setMessage("Pick the folder to receive files (gamecontrollerdb.txt, spaghetti.o2r, mods). No subfolder will be created.")
             .setCancelable(false)
             .setPositiveButton("Select Folder", (d, w) -> openFolderPicker())
             .show());
     }
 
-    private void promptForMk64() {
-        runOnUiThread(() -> createPortraitDialog()
-            .setTitle("mk64.o2r not found")
-            .setMessage("Select an existing mk64.o2r file, or install Torch to create one from your ROM.")
-            .setCancelable(false)
-            .setPositiveButton("Download Torch App", (d, w) -> openTorchDownload())
-            .setNegativeButton("Select mk64.o2r File", (d, w) -> openFilePickerForMk64())
-            .show());
-    }
-
-    // ===== Folder / File pickers =====
     public void openFolderPicker() {
         Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
         i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -200,7 +247,7 @@ public class MainActivity extends SDLActivity {
             startActivity(chooser);
             showToast("Install Torch to create mk64.o2r, then return here.");
         } catch (Exception e) {
-            Log.e("MainActivity", "openTorchDownload", e);
+            Log.e(TAG, "openTorchDownload", e);
             showToast("Visit: https://github.com/izzy2lost/Torch/releases");
         }
     }
@@ -214,187 +261,170 @@ public class MainActivity extends SDLActivity {
         if (requestCode == REQ_PICK_FOLDER) {
             handleFolderSelection(data.getData(), data.getFlags());
         } else if (requestCode == REQ_PICK_MK64) {
-            handleMk64Selection(data.getData());
+            handleRomFileSelection(data.getData());
         }
     }
 
-    // ===== Folder selection & SAF-first sync =====
+    // ===== Folder selection & copy (SAF) =====
     private void handleFolderSelection(Uri treeUri, int returnedFlags) {
         if (treeUri == null) { showToast("No folder selected."); return; }
 
-        // Persist read/write
+        // Persist read/write — try returned flags; if 0, try explicit
         try {
-            final int perms = returnedFlags &
+            final int permsReturned = returnedFlags &
                     (Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-            getContentResolver().takePersistableUriPermission(treeUri, perms);
-        } catch (Exception ignored) {}
+            if (permsReturned != 0) {
+                getContentResolver().takePersistableUriPermission(treeUri, permsReturned);
+            } else {
+                getContentResolver().takePersistableUriPermission(treeUri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "takePersistableUriPermission failed (continuing with transient perms): " + e);
+        }
 
         setUserFolderUri(treeUri);
         userFolderUri = treeUri;
         showToast("Folder selected.");
 
-        // Make SAF authoritative and sync into internal cache
-        syncBothWaysPreferSaf();
+        DocumentFile userRoot = DocumentFile.fromTreeUri(this, treeUri);
+        if (userRoot == null) {
+            showToast("Cannot access the selected folder.");
+            return;
+        }
 
-        // If mk64 still not present internally, prompt
-        File internalMk64 = new File(getFilesDir(), F_MK64);
+        if (!verifyWritable(userRoot)) {
+            showToast("Can't write there. Try Downloads or a folder you create under Internal storage.");
+            return;
+        }
+
+        boolean anyCopied = copyFromBestSourceToSaf(userRoot);
+
+        File internalMk64 = new File(getFilesDir(), "mk64.o2r");
         if (!internalMk64.exists()) {
-            promptForMk64();
-        } else {
             runOnUiThread(() -> createPortraitDialog()
-                .setTitle("Ready")
-                .setMessage("Files are in sync. Restart to load the game.")
+                .setTitle("mk64.o2r not found internally")
+                .setMessage("Pick an existing mk64.o2r file or use Torch to create one.")
+                .setCancelable(false)
+                .setPositiveButton("Download Torch App", (d, w) -> openTorchDownload())
+                .setNegativeButton("Select mk64.o2r File", (d, w) -> openFilePickerForMk64())
+                .show());
+        } else {
+            final String msg = anyCopied ? "Files copied. Restart to load the game."
+                                         : "Nothing copied (sources not found).";
+            runOnUiThread(() -> createPortraitDialog()
+                .setTitle("Copy complete")
+                .setMessage(msg)
                 .setPositiveButton("Restart", (d, w) -> restartApp())
                 .setNegativeButton("Later", null)
                 .show());
         }
     }
 
-    // When user selects mk64.o2r via SAF file picker (any location),
-    // copy into SAF userRoot (if set) and internal cache.
-    private void handleMk64Selection(Uri selectedFileUri) {
+    private boolean verifyWritable(DocumentFile dir) {
+        try {
+            DocumentFile tmp = dir.createFile("application/octet-stream", ".saf_write_test");
+            if (tmp == null) return false;
+            OutputStream os = getContentResolver().openOutputStream(tmp.getUri(), "w");
+            if (os == null) return false;
+            os.write(1);
+            os.flush();
+            os.close();
+            tmp.delete();
+            return true;
+        } catch (Exception e) {
+            Log.w(TAG, "verifyWritable failed: " + e);
+            return false;
+        }
+    }
+
+    // Choose best source root:
+    // 1) Internal files dir
+    // 2) External files dir root (legacy)
+    // 3) External files dir /Spaghetti-Kart (legacy leftover)
+    private File chooseBestSourceRoot() {
+        File internal = getFilesDir();
+        File external = getExternalFilesDir(null);
+        File legacy = (external != null) ? new File(external, "Spaghetti-Kart") : null;
+
+        boolean hasInternal = hasAnyTarget(internal);
+        boolean hasExternal = external != null && hasAnyTarget(external);
+        boolean hasLegacy   = legacy != null && hasAnyTarget(legacy);
+
+        Log.i(TAG, "Source check -> internal=" + hasInternal + ", external=" + hasExternal + ", legacy=" + hasLegacy);
+        if (hasInternal) return internal;
+        if (hasExternal) return external;
+        if (hasLegacy)   return legacy;
+        return internal; // default (will report not found later)
+    }
+
+    private boolean hasAnyTarget(File root) {
+        if (root == null) return false;
+        if (new File(root, "gamecontrollerdb.txt").exists()) return true;
+        if (new File(root, "controllerdb.txt").exists())     return true; // tolerate alt name
+        if (new File(root, "spaghetti.o2r").exists())         return true;
+        File mods = new File(root, "mods");
+        return mods.exists() && mods.isDirectory() && mods.listFiles() != null && mods.listFiles().length > 0;
+    }
+
+    private boolean copyFromBestSourceToSaf(DocumentFile userRoot) {
+        File srcRoot = chooseBestSourceRoot();
+        Log.i(TAG, "Copying from srcRoot=" + srcRoot);
+
+        int copied = 0;
+
+        // gamecontrollerdb.txt (prefer this name), fall back to controllerdb.txt if that's what exists
+        File gcdb = new File(srcRoot, "gamecontrollerdb.txt");
+        File cdb  = new File(srcRoot, "controllerdb.txt");
+        if (gcdb.exists()) { if (copyFileToTree(gcdb, userRoot, "text/plain")) copied++; }
+        else if (cdb.exists()) { if (copyFileToTree(cdb, userRoot, "text/plain")) copied++; }
+        else Log.w(TAG, "No controller DB at " + srcRoot);
+
+        // spaghetti.o2r
+        File spaghetti = new File(srcRoot, "spaghetti.o2r");
+        if (spaghetti.exists()) { if (copyFileToTree(spaghetti, userRoot, "application/octet-stream")) copied++; }
+        else Log.w(TAG, "No spaghetti.o2r at " + srcRoot);
+
+        // mods
+        File modsSrc = new File(srcRoot, "mods");
+        if (modsSrc.exists() && modsSrc.isDirectory()) {
+            if (copyFolderToTree(modsSrc, userRoot)) copied++;
+        } else Log.w(TAG, "No mods folder at " + srcRoot);
+
+        if (copied > 0) showToast("Copied " + copied + " item(s) to selected folder.");
+        else showToast("Nothing copied. Make sure files exist in app storage.");
+        return copied > 0;
+    }
+
+    // When user picks mk64.o2r via SAF, copy into INTERNAL (engine reads from here)
+    private void handleRomFileSelection(Uri selectedFileUri) {
         if (selectedFileUri == null) { showToast("No mk64.o2r selected."); return; }
 
-        showToast("Importing mk64.o2r...");
-        try {
-            // If userRoot is set, copy into it first
-            DocumentFile userRoot = getUserRoot();
-            if (userRoot != null && userRoot.canWrite()) {
-                // Overwrite mk64.o2r in SAF root
-                copyContentUriToTree(selectedFileUri, userRoot, F_MK64, "application/octet-stream");
-            }
-
-            // Always update internal runtime copy
-            File destInternal = new File(getFilesDir(), F_MK64);
-            try (InputStream in = getContentResolver().openInputStream(selectedFileUri);
-                 FileOutputStream out = new FileOutputStream(destInternal)) {
-                byte[] buf = new byte[8192];
-                int r;
-                while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
-                out.flush();
-                out.getFD().sync();
-            }
+        File dest = new File(getFilesDir(), "mk64.o2r");
+        showToast("Copying mk64.o2r...");
+        try (InputStream in = getContentResolver().openInputStream(selectedFileUri);
+             FileOutputStream out = new FileOutputStream(dest)) {
+            byte[] buf = new byte[8192];
+            int r;
+            long total = 0;
+            while ((r = in.read(buf)) != -1) { out.write(buf, 0, r); total += r; }
+            out.flush();
+            out.getFD().sync();
+            Log.i(TAG, "mk64.o2r copied to internal (" + total + " bytes): " + dest.getAbsolutePath());
 
             runOnUiThread(() -> createPortraitDialog()
                 .setTitle("mk64.o2r ready")
-                .setMessage("mk64.o2r imported. Restart to load the game.")
+                .setMessage("mk64.o2r copied. Restart to load the game.")
                 .setPositiveButton("Restart", (d, w) -> restartApp())
                 .show());
         } catch (IOException e) {
-            Log.e("MainActivity", "handleMk64Selection", e);
-            showToast("Failed to import mk64.o2r: " + e.getMessage());
+            Log.e(TAG, "handleRomFileSelection", e);
+            showToast("Failed to copy mk64.o2r: " + e.getMessage());
         }
     }
 
-    // ===== Sync logic =====
-
-    // Full sync where SAF is the source of truth:
-    // - If exists only on SAF -> copy to internal
-    // - If exists only internal -> copy to SAF
-    // - If both exist -> compare lastModified and copy newer over older
-    private void syncBothWaysPreferSaf() {
-        DocumentFile userRoot = getUserRoot();
-        if (userRoot == null || !userRoot.canWrite()) {
-            showToast("Selected folder is unavailable or read-only.");
-            return;
-        }
-
-        File internal = getFilesDir();
-        if (!internal.exists()) internal.mkdirs();
-
-        // Controller DB (either name)
-        bidirSyncFile(userRoot, internal, F_CONTROLLER_DB_1, "text/plain");
-        bidirSyncFile(userRoot, internal, F_CONTROLLER_DB_2, "text/plain");
-
-        // spaghetti.o2r
-        bidirSyncFile(userRoot, internal, F_SPAGHETTI, "application/octet-stream");
-
-        // mk64.o2r
-        bidirSyncFile(userRoot, internal, F_MK64, "application/octet-stream");
-
-        // mods directory
-        bidirSyncFolder(userRoot, internal, D_MODS);
-    }
-
-    // Push everything internal -> SAF (used onPause to export saves/configs)
-    private void syncInternalToSaf() {
-        DocumentFile userRoot = getUserRoot();
-        if (userRoot == null || !userRoot.canWrite()) return;
-
-        File internal = getFilesDir();
-        pushFileIfExists(internal, userRoot, F_CONTROLLER_DB_1, "text/plain");
-        pushFileIfExists(internal, userRoot, F_CONTROLLER_DB_2, "text/plain");
-        pushFileIfExists(internal, userRoot, F_SPAGHETTI, "application/octet-stream");
-        pushFileIfExists(internal, userRoot, F_MK64, "application/octet-stream");
-        pushFolderIfExists(internal, userRoot, D_MODS);
-    }
-
-    private void pushFileIfExists(File internalRoot, DocumentFile userRoot, String name, String mime) {
-        File src = new File(internalRoot, name);
-        if (src.exists() && src.isFile()) {
-            copyFileToTree(src, userRoot, mime);
-        }
-    }
-
-    private void pushFolderIfExists(File internalRoot, DocumentFile userRoot, String dirName) {
-        File srcDir = new File(internalRoot, dirName);
-        if (srcDir.exists() && srcDir.isDirectory()) {
-            copyFolderToTree(srcDir, userRoot);
-        }
-    }
-
-    private void bidirSyncFile(DocumentFile userRoot, File internalRoot, String name, String mime) {
-        DocumentFile safFile = findChild(userRoot, name);
-        File internalFile = new File(internalRoot, name);
-
-        boolean hasSaf = safFile != null && safFile.isFile();
-        boolean hasInt = internalFile.exists() && internalFile.isFile();
-
-        if (hasSaf && !hasInt) {
-            copyTreeToFile(safFile, internalFile);
-            return;
-        }
-        if (!hasSaf && hasInt) {
-            copyFileToTree(internalFile, userRoot, mime);
-            return;
-        }
-        if (hasSaf && hasInt) {
-            long safTime = safFile.lastModified();
-            long intTime = internalFile.lastModified();
-            // Prefer SAF when in doubt
-            if (safTime >= intTime) {
-                copyTreeToFile(safFile, internalFile);
-            } else {
-                copyFileToTree(internalFile, userRoot, mime);
-            }
-        }
-    }
-
-    private void bidirSyncFolder(DocumentFile userRoot, File internalRoot, String dirName) {
-        DocumentFile safDir = findChild(userRoot, dirName);
-        File intDir = new File(internalRoot, dirName);
-
-        boolean hasSaf = safDir != null && safDir.isDirectory();
-        boolean hasInt = intDir.exists() && intDir.isDirectory();
-
-        if (hasSaf && !hasInt) {
-            copyTreeFolderToInternal(safDir, intDir);
-            return;
-        }
-        if (!hasSaf && hasInt) {
-            copyFolderToTree(intDir, userRoot);
-            return;
-        }
-        if (hasSaf && hasInt) {
-            // Merge: pull newer files from SAF, push newer from internal
-            // For simplicity, pull SAF first then push internal (will overwrite older)
-            copyTreeFolderToInternal(safDir, intDir);
-            copyFolderToTree(intDir, userRoot);
-        }
-    }
-
-    // ===== SAF and File helpers =====
-    private void copyFileToTree(File src, DocumentFile dstParent, String mimeGuess) {
+    // ===== SAF copy helpers =====
+    private boolean copyFileToTree(File src, DocumentFile dstParent, String mimeGuess) {
         try {
             // Overwrite if present
             DocumentFile existing = findChild(dstParent, src.getName());
@@ -403,94 +433,48 @@ public class MainActivity extends SDLActivity {
             String mime = (mimeGuess != null) ? mimeGuess : guessMime(src.getName());
             DocumentFile dest = dstParent.createFile(mime, src.getName());
             if (dest == null) {
-                Log.e("MainActivity", "Failed to create file in tree: " + src.getName());
-                return;
+                Log.e(TAG, "Failed to create file in tree: " + src.getName());
+                return false;
             }
             try (InputStream in = new FileInputStream(src);
                  OutputStream out = getContentResolver().openOutputStream(dest.getUri(), "w")) {
                 if (out == null) throw new IOException("Null OutputStream from resolver");
                 byte[] buf = new byte[8192];
                 int r;
-                while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
+                long total = 0;
+                while ((r = in.read(buf)) != -1) {
+                    out.write(buf, 0, r);
+                    total += r;
+                }
                 out.flush();
+                Log.i(TAG, "Wrote " + total + " bytes → " + dest.getUri());
             }
-            Log.i("MainActivity", "Copied to SAF: " + src.getAbsolutePath() + " → " + dest.getUri());
+            Log.i(TAG, "Copied to SAF: " + src.getAbsolutePath() + " → " + dest.getUri());
+            return true;
         } catch (IOException e) {
-            Log.e("MainActivity", "copyFileToTree " + src.getName(), e);
+            Log.e(TAG, "copyFileToTree " + src.getName(), e);
             showToast("Failed copying " + src.getName());
+            return false;
         }
     }
 
-    private void copyContentUriToTree(Uri srcUri, DocumentFile dstParent, String outName, String mime) throws IOException {
-        DocumentFile existing = findChild(dstParent, outName);
-        if (existing != null && existing.isFile()) existing.delete();
-
-        DocumentFile dest = dstParent.createFile(mime, outName);
-        if (dest == null) throw new IOException("Failed to create SAF file: " + outName);
-
-        try (InputStream in = getContentResolver().openInputStream(srcUri);
-             OutputStream out = getContentResolver().openOutputStream(dest.getUri(), "w")) {
-            if (in == null || out == null) throw new IOException("Resolver stream null");
-            byte[] buf = new byte[8192];
-            int r;
-            while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
-            out.flush();
-        }
-    }
-
-    private void copyTreeToFile(DocumentFile src, File dest) {
-        try {
-            // Ensure parent exists
-            File parent = dest.getParentFile();
-            if (parent != null && !parent.exists()) parent.mkdirs();
-
-            try (InputStream in = getContentResolver().openInputStream(src.getUri());
-                 FileOutputStream out = new FileOutputStream(dest)) {
-                byte[] buf = new byte[8192];
-                int r;
-                while ((r = in.read(buf)) != -1) out.write(buf, 0, r);
-                out.flush();
-                out.getFD().sync();
-            }
-            if (src.lastModified() > 0) {
-                // Try to keep timestamps roughly aligned
-                dest.setLastModified(src.lastModified());
-            }
-            Log.i("MainActivity", "Copied SAF → internal: " + src.getName() + " -> " + dest.getAbsolutePath());
-        } catch (IOException e) {
-            Log.e("MainActivity", "copyTreeToFile " + src.getName(), e);
-            showToast("Failed importing " + src.getName());
-        }
-    }
-
-    private void copyFolderToTree(File srcDir, DocumentFile dstParent) {
+    // Returns true if any item was copied
+    private boolean copyFolderToTree(File srcDir, DocumentFile dstParent) {
+        boolean any = false;
         DocumentFile dstDir = ensureDirectory(dstParent, srcDir.getName());
-        if (dstDir == null) return;
+        if (dstDir == null) return false;
 
         File[] kids = srcDir.listFiles();
-        if (kids == null) return;
+        if (kids == null) return false;
 
         for (File kid : kids) {
             if (kid.isDirectory()) {
-                copyFolderToTree(kid, dstDir);
+                if (copyFolderToTree(kid, dstDir)) any = true;
             } else {
-                copyFileToTree(kid, dstDir, guessMime(kid.getName()));
+                if (copyFileToTree(kid, dstDir, guessMime(kid.getName()))) any = true;
             }
         }
-    }
-
-    private void copyTreeFolderToInternal(DocumentFile srcDir, File dstDir) {
-        if (!dstDir.exists()) dstDir.mkdirs();
-        DocumentFile[] kids = srcDir.listFiles();
-        if (kids == null) return;
-
-        for (DocumentFile kid : kids) {
-            if (kid.isDirectory()) {
-                copyTreeFolderToInternal(kid, new File(dstDir, kid.getName()));
-            } else if (kid.isFile()) {
-                copyTreeToFile(kid, new File(dstDir, kid.getName()));
-            }
-        }
+        return any;
     }
 
     private DocumentFile ensureDirectory(DocumentFile parent, String name) {
