@@ -96,6 +96,83 @@ public class MainActivity extends SDLActivity {
             return null;
         }
     }
+    
+    private void syncModsFromUserFolder() {
+        try {
+            DocumentFile userRoot = DocumentFile.fromTreeUri(this, userFolderUri);
+            if (userRoot == null) return;
+            
+            DocumentFile userModsFolder = userRoot.findFile("mods");
+            if (userModsFolder == null || !userModsFolder.isDirectory()) {
+                Log.i(TAG, "No mods folder found in user directory");
+                return;
+            }
+            
+            File internalModsFolder = new File(getFilesDir(), "mods");
+            if (!internalModsFolder.exists()) {
+                internalModsFolder.mkdirs();
+            }
+            
+            // Clear existing mods in internal storage first
+            clearDirectory(internalModsFolder);
+            
+            // Copy all files from user mods folder to internal mods folder
+            copyModsRecursively(userModsFolder, internalModsFolder);
+            
+            Log.i(TAG, "Mods synced from user folder to internal storage");
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Error syncing mods from user folder", e);
+        }
+    }
+    
+    private void clearDirectory(File dir) {
+        if (dir.exists() && dir.isDirectory()) {
+            File[] files = dir.listFiles();
+            if (files != null) {
+                for (File file : files) {
+                    if (file.isDirectory()) {
+                        clearDirectory(file);
+                    }
+                    file.delete();
+                }
+            }
+        }
+    }
+    
+    private void copyModsRecursively(DocumentFile sourceDir, File destDir) {
+        try {
+            DocumentFile[] files = sourceDir.listFiles();
+            if (files == null) return;
+            
+            for (DocumentFile file : files) {
+                String fileName = file.getName();
+                if (fileName == null) continue;
+                
+                File destFile = new File(destDir, fileName);
+                
+                if (file.isDirectory()) {
+                    // Create directory and recurse
+                    destFile.mkdirs();
+                    copyModsRecursively(file, destFile);
+                } else {
+                    // Copy file
+                    try (InputStream in = getContentResolver().openInputStream(file.getUri());
+                         FileOutputStream out = new FileOutputStream(destFile)) {
+                        byte[] buf = new byte[8192];
+                        int r;
+                        while ((r = in.read(buf)) != -1) { out.write(buf, 0, r); }
+                        out.flush();
+                        Log.i(TAG, "Copied mod file: " + fileName);
+                    } catch (IOException e) {
+                        Log.e(TAG, "Failed to copy mod file: " + fileName, e);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error in copyModsRecursively", e);
+        }
+    }
 
     // ===== Lifecycle =====
     @Override
@@ -138,6 +215,11 @@ public class MainActivity extends SDLActivity {
                     }
                 }
             }
+        }
+        
+        // Always sync mods folder from user's chosen folder to internal storage
+        if (userFolderUri != null) {
+            syncModsFromUserFolder();
         }
         
         // Now check if mk64.o2r exists in internal storage
