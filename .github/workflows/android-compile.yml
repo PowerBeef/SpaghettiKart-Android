@@ -85,7 +85,14 @@ jobs:
     - name: Setup signing keystore (Release only)
       if: github.event.inputs.build_type == 'release' || github.ref == 'refs/heads/main'
       run: |
-        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/release.keystore
+        echo "$KEYSTORE_BASE64" | base64 -d > android/app/release.keystore
+        if [ ! -f android/app/release.keystore ]; then
+          echo "Failed to create keystore file"
+          exit 1
+        fi
+        echo "Keystore file created successfully:"
+        ls -la android/app/release.keystore
+        file android/app/release.keystore
       env:
         KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
     
