@@ -333,7 +333,7 @@ public class MainActivity extends SDLActivity {
     // ===== UI helpers =====
     private AlertDialog.Builder createPortraitDialog() {
         setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-        AlertDialog.Builder b = new AlertDialog.Builder(this);
+        AlertDialog.Builder b = new AlertDialog.Builder(this, R.style.RoundedDialog);
         b.setOnDismissListener(d -> setRequestedOrientation(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE));
         return b;
     }
@@ -361,7 +361,7 @@ public class MainActivity extends SDLActivity {
     private void promptForUserFolder() {
         runOnUiThread(() -> createPortraitDialog()
             .setTitle("Choose Your Folder")
-            .setMessage("Pick the folder to receive files (gamecontrollerdb.txt, spaghetti.o2r, mods). No subfolder will be created.")
+            .setMessage("Select a folder for your mk64.o2r file and mods location. This will be your main Spaghetti Kart folder where you can add mods and manage game files.")
             .setCancelable(false)
             .setPositiveButton("Select Folder", (d, w) -> openFolderPicker())
             .show());
@@ -391,7 +391,14 @@ public class MainActivity extends SDLActivity {
             Intent chooser = Intent.createChooser(browser, "Open Torch download page with:");
             chooser.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(chooser);
-            showToast("Install Torch to create mk64.o2r, then return here.");
+            showToast("Opening Torch download. App will close so you can install Torch.");
+            
+            // Close the app after a short delay so user can install Torch
+            new android.os.Handler(getMainLooper()).postDelayed(() -> {
+                finish();
+                System.exit(0);
+            }, 2000);
+            
         } catch (Exception e) {
             Log.e(TAG, "openTorchDownload", e);
             showToast("Visit: https://github.com/izzy2lost/Torch/releases");
