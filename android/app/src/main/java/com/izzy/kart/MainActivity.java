@@ -133,25 +133,22 @@ static {
     
     private void copyEssentialFilesToFolder() {
         try {
-            // Copy core app files to app work directory
-            File appWorkDir = getAppWorkDir();
+            // Copy essential files to user directory if available, otherwise app work directory
+            File targetDir = (targetRootFolder != null && targetRootFolder.exists()) ? targetRootFolder : getAppWorkDir();
             
-            File skO2rFile = new File(appWorkDir, "spaghetti.o2r");
-            File gameControllerDb = new File(appWorkDir, "gamecontrollerdb.txt");
+            File skO2rFile = new File(targetDir, "spaghetti.o2r");
+            File gameControllerDb = new File(targetDir, "gamecontrollerdb.txt");
+            File targetModsDir = new File(targetDir, "mods");
             
+            // Ensure target directory exists
+            if (!targetDir.exists()) targetDir.mkdirs();
+            
+            // Copy essential files
             if (!skO2rFile.exists()) copyAssetFile("spaghetti.o2r", skO2rFile);
             if (!gameControllerDb.exists()) copyAssetFile("gamecontrollerdb.txt", gameControllerDb);
+            if (!targetModsDir.exists()) targetModsDir.mkdirs();
             
-            Log.i("MainActivity", "Essential app files copied to: " + appWorkDir.getAbsolutePath());
-            
-            // Create mods folder in user directory if we have one
-            if (targetRootFolder != null && targetRootFolder.exists()) {
-                File userModsDir = new File(targetRootFolder, "mods");
-                if (!userModsDir.exists()) {
-                    userModsDir.mkdirs();
-                    Log.i("MainActivity", "Created mods folder in user directory: " + userModsDir.getAbsolutePath());
-                }
-            }
+            Log.i("MainActivity", "Essential files copied to: " + targetDir.getAbsolutePath());
             
         } catch (Exception e) {
             Log.e("MainActivity", "Error copying essential files", e);
