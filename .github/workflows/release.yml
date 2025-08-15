@@ -15,7 +15,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: true
-        
+    
     - name: Update version in build.gradle
       run: |
         sed -i "s/versionName \".*\"/versionName \"${{ github.event.inputs.version }}\"/" android/app/build.gradle
@@ -24,23 +24,23 @@ jobs:
         NEW_CODE=$((CURRENT_CODE + 1))
         sed -i "s/versionCode $CURRENT_CODE/versionCode $NEW_CODE/" android/app/build.gradle
         echo "Updated to version ${{ github.event.inputs.version }} with code $NEW_CODE"
-        
+
     - name: Trigger Android Build
       uses: ./.github/workflows/android-compile.yml
       with:
         build_type: release
     
-    - name: Create Release
-      uses: actions/create-release@v1
+    - name: Spaghetti Kart v${{ github.event.inputs.version }}
+      uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Spaghetti Kart ${{ github.ref }}
+        tag_name: v${{ github.event.inputs.version }}
+        name: Spaghetti Kart v${{ github.event.inputs.version }}
         draft: false
         prerelease: false
         body: |
-          ## Spaghetti Kart Release ${{ github.ref }}
+          ## 🏎️ Spaghetti Kart v${{ github.event.inputs.version }}
           
           ### What's New
           - Improved folder selection with SAF (Storage Access Framework)
@@ -56,6 +56,36 @@ jobs:
           5. Add your mk64.o2r file (use Torch app to create from ROM)
           6. Enjoy!
     
+    - name: Create Release
+      id: create_release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: v${{ github.event.inputs.version }}
+        name: 🏎️ Spaghetti Kart v${{ github.event.inputs.version }}
+        body: |
+          ## 🏎️ Spaghetti Kart v${{ github.event.inputs.version }}
+          
+          ### 📱 Android Release
+          
+          **✨ Highlights:**
+          - ⚡ Optimized release build with R8 code shrinking
+          - 📦 Reduced APK size and improved performance
+          - 🗂️ Enhanced file management with SAF integration
+          
+          ### 🛠️ Changes
+          - 🧭 Improved folder selection with SAF (Storage Access Framework)
+          - 🔁 Automatic mods syncing from user folder
+          - 🧊 Better UI with rounded dialogs
+          - 🔥 Torch app integration for easy mk64.o2r creation
+          
+          ### 📥 Installation
+          1. ⬇️ Download the APK below
+          2. 📲 Install on your Android device
+          3. 🔓 Enable "Install from unknown sources" in Android settings
+          4. 📁 Select a folder for your game files
+          5. 💾 Add your mk64.o2r file (use Torch app to create from ROM)
+          6. 🎮 Enjoy!
+
     - name: Upload Release APK
       uses: actions/upload-release-asset@v1
       env:
@@ -63,5 +93,5 @@ jobs:
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./spaghettikart-release.apk
-        asset_name: SpaghettiKart-${{ github.ref }}-release.apk
+        asset_name: SpaghettiKart-v${{ github.event.inputs.version }}-release.apk
         asset_content_type: application/vnd.android.package-archive
