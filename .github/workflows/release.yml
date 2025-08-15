@@ -39,9 +39,10 @@ jobs:
           ### Installation
           1. Download the APK below
           2. Install on your Android device
-          3. Select a folder for your game files
-          4. Add your mk64.o2r file (use Torch app to create from ROM)
-          5. Enjoy!
+          3. Enable "Install from unknown sources" in Android settings
+          4. Select a folder for your game files
+          5. Add your mk64.o2r file (use Torch app to create from ROM)
+          6. Enjoy!
     
     - name: Upload Release APK
       uses: actions/upload-release-asset@v1
