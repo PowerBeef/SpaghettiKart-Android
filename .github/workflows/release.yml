@@ -1,9 +1,12 @@
 name: Create Android Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 1.0.1)'
+        required: true
+        default: '1.0.0'
 
 jobs:
   create-release:
@@ -12,7 +15,16 @@ jobs:
     - uses: actions/checkout@v4
       with:
         submodules: true
-    
+        
+    - name: Update version in build.gradle
+      run: |
+        sed -i "s/versionName \".*\"/versionName \"${{ github.event.inputs.version }}\"/" android/app/build.gradle
+        # Increment version code
+        CURRENT_CODE=$(grep "versionCode" android/app/build.gradle | sed 's/.*versionCode \([0-9]*\).*/\1/')
+        NEW_CODE=$((CURRENT_CODE + 1))
+        sed -i "s/versionCode $CURRENT_CODE/versionCode $NEW_CODE/" android/app/build.gradle
+        echo "Updated to version ${{ github.event.inputs.version }} with code $NEW_CODE"
+        
     - name: Trigger Android Build
       uses: ./.github/workflows/android-compile.yml
       with:
