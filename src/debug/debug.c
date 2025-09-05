@@ -41,7 +41,7 @@ void display_dvdl(void) {
 
         switch (currentAttribute->variableFlag & 0x8F) {
             case DISPLAY_FLOAT_NUMBER:
-                sprintf(cBuffer, "%.3f", *(f32*) &variable);
+                snprintf(cBuffer, CHARACTER_BUFFER_SIZE, "%.3f", *(f32*) &variable);
                 break;
             case DISPLAY_HEXIDECIMAL_NUMBER:
                 base = HEXIDECIMAL;

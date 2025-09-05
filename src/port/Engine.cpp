@@ -652,8 +652,14 @@ ImFont* GameEngine::CreateFontWithSize(float size, std::string fontPath) {
         std::shared_ptr<Ship::Font> fontData = std::static_pointer_cast<Ship::Font>(
             Ship::Context::GetInstance()->GetResourceManager()->LoadResource(fontPath, false, initData));
         char* fontDataPtr = (char*) malloc(fontData->DataSize);
+        if (fontDataPtr == NULL) {
+            printf("Failed to allocate memory for font data\n");
+            return nullptr;
+        }
         memcpy(fontDataPtr, fontData->Data, fontData->DataSize);
         font = mImGuiIo->Fonts->AddFontFromMemoryTTF(fontDataPtr, fontData->DataSize, size);
+        // Note: ImGui copies the font data internally, so we can free our copy
+        free(fontDataPtr);
     }
     // FontAwesome fonts need to have their sizes reduced by 2.0f/3.0f in order to align correctly
     float iconFontSize = size * 2.0f / 3.0f;

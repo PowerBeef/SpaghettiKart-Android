@@ -196,7 +196,8 @@ void Course::Load() {
             if (asset == &this->Props.textures[0]) {
                 gSegmentTable[5] = reinterpret_cast<uintptr_t>(&freeMemory[0]);
             }
-            strcpy(reinterpret_cast<char*>(freeMemory), asset->addr);
+            strncpy(reinterpret_cast<char*>(freeMemory), asset->addr, size - 1);
+            freeMemory[size - 1] = '\0'; // Ensure null termination
             // memcpy(freeMemory, texture, size);
             texSegSize += size;
             // printf("Texture Addr: 0x%llX, size 0x%X\n", &freeMemory[0], size);
