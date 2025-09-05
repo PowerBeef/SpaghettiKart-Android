@@ -190,6 +190,10 @@ long read_file(const char *file_name, unsigned char **data)
    }
 
    in_buf = malloc(file_size);
+   if (in_buf == NULL) {
+      fclose(in);
+      return -4; // Memory allocation failed
+   }
    fseek(in, 0, SEEK_SET);
 
    // read bytes
@@ -290,6 +294,10 @@ void dir_list_ext(const char *dir, const char *extension, dir_list *list)
    }
 
    pool = malloc(FILENAME_MAX * MAX_DIR_FILES);
+   if (pool == NULL) {
+      closedir(dfd);
+      return -1; // Memory allocation failed
+   }
    pool_ptr = pool;
 
    idx = 0;
@@ -308,6 +316,10 @@ void dir_list_ext(const char *dir, const char *extension, dir_list *list)
 
 void dir_list_free(dir_list *list)
 {
+   if (list == NULL) {
+      return;
+   }
+   
    // assume first entry in array is allocated
    if (list->files[0]) {
       free(list->files[0]);

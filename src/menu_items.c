@@ -1413,11 +1413,11 @@ void func_80091B78(void) {
     func_800AF9B0();
     unref_D_8018EE0C = 0;
 
-    for (i = 0; i < 5; i++) {
+    for (i = 0; i < (s32)(sizeof(gTransitionType) / sizeof(gTransitionType[0])); i++) {
         gTransitionType[i] = 0;
     }
 
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < (s32)(sizeof(D_8018E838) / sizeof(D_8018E838[0])); i++) {
         D_8018E838[i] = 0;
     }
 
@@ -1469,7 +1469,7 @@ s32 func_80091D74(void) {
         return 0;
     }
 
-    for (i = 0; i < 16; i++) {
+    for (i = 0; i < (s32)(sizeof(pfsError) / sizeof(pfsError[0])); i++) {
         pfsError[i] = osPfsFileState(&gControllerPak1FileHandle, i, pfsState + i);
     }
 
@@ -1509,11 +1509,11 @@ void func_80091FA4(void) {
     sTKMK00_LowResBuffer = (u8*) get_next_available_memory_addr(0x00001000);
     sGPPointsCopy = get_next_available_memory_addr(4);
 
-    for (i = 0; i < 5; i++) {
+    for (i = 0; i < (s32)(sizeof(gTransitionType) / sizeof(gTransitionType[0])); i++) {
         gTransitionType[i] = 0;
     }
 
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < (s32)(sizeof(D_8018E838) / sizeof(D_8018E838[0])); i++) {
         D_8018E838[i] = 0;
     }
 
@@ -1582,7 +1582,7 @@ void set_text_color_rainbow_if_selected(s32 test, s32 target, s32 alternative_co
 void func_80092258(void) {
     s32 i;
 
-    for (i = 0; i < 2; i++) {
+    for (i = 0; i < (s32)(sizeof(D_8018E850) / sizeof(D_8018E850[0])); i++) {
         D_8018E850[i] = i;
         D_8018E858[i] = 0;
     }
@@ -1612,7 +1612,7 @@ void func_80092290(s32 arg0, s32* arg1, s32* arg2) {
         *arg1 = (s32) (*arg1 + 1) % 3;
     }
 
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < (s32)(sizeof(D_800E84C0) / sizeof(D_800E84C0[0])); i++) {
         vtx = (Vtx*) LOAD_ASSET(D_800E84C0[i]);
 
         temp_v1 = (*arg1 * 2) + 2;
@@ -2457,11 +2457,11 @@ void func_80093E60(void) {
     sTKMK00_LowResBuffer = get_next_available_memory_addr(0x00001000);
     sGPPointsCopy = get_next_available_memory_addr(4U);
 
-    for (i = 0; i < 5; i++) {
+    for (i = 0; i < (s32)(sizeof(gTransitionType) / sizeof(gTransitionType[0])); i++) {
         gTransitionType[i] = 0;
     }
 
-    for (i = 0; i < 4; i++) {
+    for (i = 0; i < (s32)(sizeof(D_8018E838) / sizeof(D_8018E838[0])); i++) {
         D_8018E838[i] = 0;
     }
 

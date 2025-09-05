@@ -59,7 +59,7 @@ extern NetworkClient clients[];
 
 /* Main Networking */
 void ConnectToServer(char* ip, uint16_t port, char* username);
-void networking_init(char* ip, uint16_t port);
+int networking_init(char* ip, uint16_t port);
 void networking_update(void);
 void networking_ready_up(bool);
 void networking_cleanup(SDLNet_SocketSet);
