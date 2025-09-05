@@ -288,13 +288,18 @@ void load_kart_texture_and_render_kart_particle_on_screen_one(void) {
                 .pixel_index_array);
         osRecvMesg(&gDmaMesgQueue, &gMainReceivedMesg, OS_MESG_BLOCK);
 #else
-        strcpy(D_802BFB80
+        strncpy(D_802BFB80
                    .arraySize8[D_801651D0[gPlayersToRenderScreenId[i - 1]][gPlayersToRenderPlayerId[i - 1]]]
                               [gPlayersToRenderScreenId[i - 1]][gPlayersToRenderPlayerId[i - 1]]
                    .pixel_index_array,
                gEncodedKartTexture[D_801651D0[gPlayersToRenderScreenId[i - 1]][gPlayersToRenderPlayerId[i - 1]]]
                                   [gPlayersToRenderScreenId[i - 1]][gPlayersToRenderPlayerId[i - 1]]
-                                      .unk_00);
+                                      .unk_00,
+               0x1000);
+        D_802BFB80
+            .arraySize8[D_801651D0[gPlayersToRenderScreenId[i - 1]][gPlayersToRenderPlayerId[i - 1]]]
+                       [gPlayersToRenderScreenId[i - 1]][gPlayersToRenderPlayerId[i - 1]]
+            .pixel_index_array[0xFFF] = '\0'; // Ensure null termination
 #endif
     }
 
@@ -311,7 +316,7 @@ void load_kart_texture_and_render_kart_particle_on_screen_one(void) {
                               [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]
                    .pixel_index_array);
 #else
-    strcpy(D_802BFB80
+    strncpy(D_802BFB80
                .arraySize8[D_801651D0[gPlayersToRenderScreenId[gPlayersToRenderCount - 1]]
                                      [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]]
                           [gPlayersToRenderScreenId[gPlayersToRenderCount - 1]]
@@ -321,7 +326,14 @@ void load_kart_texture_and_render_kart_particle_on_screen_one(void) {
                                          [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]]
                               [gPlayersToRenderScreenId[gPlayersToRenderCount - 1]]
                               [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]
-                                  .unk_00);
+                                  .unk_00,
+           0x1000);
+    D_802BFB80
+        .arraySize8[D_801651D0[gPlayersToRenderScreenId[gPlayersToRenderCount - 1]]
+                           [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]]
+                  [gPlayersToRenderScreenId[gPlayersToRenderCount - 1]]
+                  [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]
+        .pixel_index_array[0xFFF] = '\0'; // Ensure null termination
 #endif
 }
 
@@ -371,7 +383,7 @@ void load_kart_texture_and_render_kart_particle_on_screen_two(void) {
                               [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]
                    .pixel_index_array);
 #else
-    strcpy(D_802BFB80
+    strncpy(D_802BFB80
                .arraySize8[D_801651D0[gPlayersToRenderScreenId[gPlayersToRenderCount - 1]]
                                      [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]]
                           [gPlayersToRenderScreenId[gPlayersToRenderCount - 1]]
@@ -381,7 +393,14 @@ void load_kart_texture_and_render_kart_particle_on_screen_two(void) {
                                          [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]]
                               [gPlayersToRenderScreenId[gPlayersToRenderCount - 1]]
                               [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]
-                                  .unk_00);
+                                  .unk_00,
+           0x1000);
+    D_802BFB80
+        .arraySize8[D_801651D0[gPlayersToRenderScreenId[gPlayersToRenderCount - 1]]
+                           [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]]
+                  [gPlayersToRenderScreenId[gPlayersToRenderCount - 1]]
+                  [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]
+        .pixel_index_array[0xFFF] = '\0'; // Ensure null termination
 #endif
 }
 
@@ -431,7 +450,7 @@ void load_kart_texture_and_render_kart_particle_on_screen_three(void) {
                               [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1] + 4]
                    .pixel_index_array);
 #else
-    strcpy(D_802BFB80
+    strncpy(D_802BFB80
                .arraySize8[D_801651D0[gPlayersToRenderScreenId[gPlayersToRenderCount - 1]]
                                      [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]]
                           [gPlayersToRenderScreenId[gPlayersToRenderCount - 1] - 2]
@@ -441,7 +460,14 @@ void load_kart_texture_and_render_kart_particle_on_screen_three(void) {
                                          [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]]
                               [gPlayersToRenderScreenId[gPlayersToRenderCount - 1] - 2]
                               [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1] + 4]
-                                  .unk_00);
+                                  .unk_00,
+           0x1000);
+    D_802BFB80
+        .arraySize8[D_801651D0[gPlayersToRenderScreenId[gPlayersToRenderCount - 1]]
+                           [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]]
+                  [gPlayersToRenderScreenId[gPlayersToRenderCount - 1] - 2]
+                  [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1] + 4]
+        .pixel_index_array[0xFFF] = '\0'; // Ensure null termination
 #endif
 }
 
@@ -491,7 +517,7 @@ void load_kart_texture_and_render_kart_particle_on_screen_four(void) {
                               [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1] + 4]
                    .pixel_index_array);
 #else
-    strcpy(D_802BFB80
+    strncpy(D_802BFB80
                .arraySize8[D_801651D0[gPlayersToRenderScreenId[gPlayersToRenderCount - 1]]
                                      [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]]
                           [gPlayersToRenderScreenId[gPlayersToRenderCount - 1] - 2]
@@ -501,7 +527,14 @@ void load_kart_texture_and_render_kart_particle_on_screen_four(void) {
                                          [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]]
                               [gPlayersToRenderScreenId[gPlayersToRenderCount - 1] - 2]
                               [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1] + 4]
-                                  .unk_00);
+                                  .unk_00,
+           0x1000);
+    D_802BFB80
+        .arraySize8[D_801651D0[gPlayersToRenderScreenId[gPlayersToRenderCount - 1]]
+                           [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1]]]
+                  [gPlayersToRenderScreenId[gPlayersToRenderCount - 1] - 2]
+                  [gPlayersToRenderPlayerId[gPlayersToRenderCount - 1] + 4]
+        .pixel_index_array[0xFFF] = '\0'; // Ensure null termination
 #endif
 }
 
