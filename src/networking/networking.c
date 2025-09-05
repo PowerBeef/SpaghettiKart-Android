@@ -40,7 +40,13 @@ void (*remoteConnectedHandler)(void);
 void ConnectToServer(char* ip, uint16_t port, char* username) {
     if (!threadStarted) {
         threadStarted = true;
-        networking_init(ip, port);
+        int result = networking_init(ip, port);
+        
+        if (result != 0) {
+            printf("Failed to initialize networking (error code: %d). Networking features will be disabled.\n", result);
+            threadStarted = false; // Reset flag so user can retry
+            return;
+        }
 
         SDL_Delay(20);
 
@@ -62,20 +68,23 @@ void set_username(const char* username) {
     localClient->username[sizeof(localClient->username) - 1] = '\0'; // Ensure null-termination
 }
 
-void networking_init(char* ip, uint16_t port) {
+int networking_init(char* ip, uint16_t port) {
     if (SDL_Init(0) == -1) {
         fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     if (SDLNet_Init() == -1) {
         fprintf(stderr, "SDLNet_Init: %s\n", SDLNet_GetError());
         SDL_Quit();
-        exit(EXIT_FAILURE);
+        return -2;
     }
 
     if (SDLNet_ResolveHost(&gNetwork.address, ip, port) == -1) {
         printf("[GameInteractor] SDLNet_ResolveHost: %s\n", SDLNet_GetError());
+        SDLNet_Quit();
+        SDL_Quit();
+        return -3;
     }
 
     // Ensure no thread is already running
@@ -87,10 +96,13 @@ void networking_init(char* ip, uint16_t port) {
 
     if (sNetworkThread == NULL) {
         printf("SDL_CreateThread failed: %s\n", SDL_GetError());
-        exit(EXIT_FAILURE);
+        SDLNet_Quit();
+        SDL_Quit();
+        return -4;
     }
 
     // sNetworkThread = std::thread(&GameInteractor::ReceiveFromServer, this);
+    return 0; // Success
 }
 
 int networking_loop(void* data) {

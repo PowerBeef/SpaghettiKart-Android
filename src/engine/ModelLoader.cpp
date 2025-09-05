@@ -35,25 +35,53 @@ void ModelLoader::Load() {
 }
 
 void ModelLoader::Extract(std::shared_ptr<Course> course) {
+    if (course == nullptr) {
+        printf("ModelLoader: Course parameter is null\n");
+        return;
+    }
+    
     std::shared_ptr<Course> saveCourse = gWorldInstance.CurrentCourse;
     gWorldInstance.CurrentCourse = course; // Quick hack so that `get_texture` will find the right textures.
 
-    size_t vtxSize = (ResourceGetSizeByName(course->vtx) / sizeof(CourseVtx)) * sizeof(Vtx);
+    size_t courseVtxSize = ResourceGetSizeByName(course->vtx);
+    if (courseVtxSize == 0) {
+        printf("ModelLoader: Failed to get vertex data size for course: %s\n", course->Props.Name);
+        gWorldInstance.CurrentCourse = saveCourse;
+        return;
+    }
+    
+    size_t vtxSize = (courseVtxSize / sizeof(CourseVtx)) * sizeof(Vtx);
     size_t texSegSize;
 
     // Convert course vtx to vtx
     Vtx* vtx = reinterpret_cast<Vtx*>(malloc(vtxSize));
     if (vtx == NULL) {
         printf("ModelLoader: Failed to allocate vertex buffer for course: %s\n", course->Props.Name);
+        gWorldInstance.CurrentCourse = saveCourse;
         return;
     }
-    func_802A86A8(reinterpret_cast<CourseVtx*>(LOAD_ASSET_RAW(course->vtx)), vtx, vtxSize / sizeof(Vtx));
+    CourseVtx* courseVtx = reinterpret_cast<CourseVtx*>(LOAD_ASSET_RAW(course->vtx));
+    if (courseVtx == NULL) {
+        printf("ModelLoader: Failed to load vertex data for course: %s\n", course->Props.Name);
+        free(vtx);
+        gWorldInstance.CurrentCourse = saveCourse;
+        return;
+    }
+    func_802A86A8(courseVtx, vtx, vtxSize / sizeof(Vtx));
 
     // Extract packed DLs
     u8* packed = reinterpret_cast<u8*>(LOAD_ASSET_RAW(course->gfx));
+    if (packed == NULL) {
+        printf("ModelLoader: Failed to load graphics data for course: %s\n", course->Props.Name);
+        free(vtx);
+        gWorldInstance.CurrentCourse = saveCourse;
+        return;
+    }
     Gfx* gfx = reinterpret_cast<Gfx*>(malloc(sizeof(Gfx) * course->gfxSize)); // Size of unpacked DLs
     if (gfx == NULL) {
         printf("ModelLoader: Failed to allocate course displaylist memory for course: %s\n", course->Props.Name);
+        free(vtx); // Clean up already allocated memory
+        gWorldInstance.CurrentCourse = saveCourse;
         return;
     }
 
@@ -63,6 +91,9 @@ void ModelLoader::Extract(std::shared_ptr<Course> course) {
     for (auto& list : _deferredList) {
         // Ensure the list matches the course being extracted.
         if (list.course != course) {
+            free(vtx);
+            free(gfx);
+            gWorldInstance.CurrentCourse = saveCourse;
             return;
         }
 
